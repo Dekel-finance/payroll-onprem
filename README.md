@@ -135,6 +135,37 @@ ways that are expensive to recover from.
 
 ---
 
+## Updates
+
+The install checks for a new version **every ten minutes** and applies it on its
+own. There is nothing to run.
+
+It follows the `stable` channel — the release we have blessed, not whatever
+built most recently — so an update only happens when we decide one should. What
+gets restarted is deliberately narrow:
+
+| | updates by itself |
+|---|---|
+| the applications (console, admin, portal, and the background services) | **yes** — a few seconds each, one at a time |
+| the database | **never.** A database upgrade is a data migration and is not something to do unattended at 03:00. |
+| the מיכפל connector | **no**, by default. It runs one session at a time and keeps a run's state in memory, so restarting it mid-run would end that payroll run without reporting it. `./install.sh update` restarts it when you are watching. |
+
+**To approve every update yourself** instead, set one of these in `.env` and
+restart:
+
+```bash
+AUTO_UPDATE_MONITOR_ONLY=true   # it reports what it would do, and does nothing
+BUNDLE_VERSION=1.0.0            # pin an exact version; updates never fire
+```
+
+Either way `./install.sh update` applies the current release immediately.
+
+> The updater needs access to the Docker service on this machine, which in
+> practice makes it as privileged as the administrator account. That is the cost
+> of unattended security patching on a server nobody logs into. If your security
+> policy does not allow it, use `AUTO_UPDATE_MONITOR_ONLY=true` and update by
+> hand.
+
 ## Running it
 
 ```bash

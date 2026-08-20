@@ -132,7 +132,7 @@ write_env() {
 # is unrecoverable — there is no reset, by design.
 
 DEPLOY_TARGET=onprem
-BUNDLE_VERSION=1.0.0
+BUNDLE_VERSION=stable
 MONGODB_DB=payroll
 
 GATEWAY_TOKEN=$(rand_hex)
@@ -171,6 +171,13 @@ BETTERSTACK_HEARTBEAT_URL=${BETTERSTACK_HEARTBEAT_URL:-}
 GATEWAY_MODE=enforce
 GATEWAY_KINDS=email,id,phone,person,org
 GATEWAY_ATTACHMENTS=block
+
+# Checked every AUTO_UPDATE_INTERVAL seconds against the registry. `stable` is a
+# channel we move deliberately, which is what makes an unattended update safe;
+# pin an exact version instead and updates simply never fire.
+AUTO_UPDATE_INTERVAL=${AUTO_UPDATE_INTERVAL:-600}
+AUTO_UPDATE_MONITOR_ONLY=${AUTO_UPDATE_MONITOR_ONLY:-false}
+AUTO_UPDATE_CONNECTOR=${AUTO_UPDATE_CONNECTOR:-false}
 
 CONSOLE_PORT=${CONSOLE_PORT:-4201}
 ADMIN_PORT=${ADMIN_PORT:-4301}
@@ -217,7 +224,7 @@ cmd_install() {
   step "Pulling the images"
   # No credentials: the registry serves these anonymously. If this ever fails,
   # it is the network between here and the registry, not a login.
-  if ! docker pull -q "${PAYROLL_IMAGE:-$REGISTRY/payroll-onprem}:${BUNDLE_VERSION:-1.0.0}"; then
+  if ! docker pull -q "${PAYROLL_IMAGE:-$REGISTRY/payroll-onprem}:${BUNDLE_VERSION:-stable}"; then
     die "could not reach $REGISTRY — check the proxy or firewall, then run ./install.sh install again"
   fi
   ok "images are local"
@@ -279,7 +286,7 @@ cmd_status() {
 cmd_update() {
   # shellcheck disable=SC1090
   set -a && . "$ENV_FILE" && set +a
-  step "Pulling ${BUNDLE_VERSION:-1.0.0}"
+  step "Pulling ${BUNDLE_VERSION:-stable}"
   dc pull
   dc up -d
   ok "updated — your data was not touched"

@@ -26,7 +26,7 @@ name: payroll-onprem
 x-image: &image
   # Pulled, not built. The published image is the artefact you are running; there
   # is no source tree on this machine and there does not need to be.
-  image: ${PAYROLL_IMAGE:-dekelmichpalil.azurecr.io/payroll-onprem}:${BUNDLE_VERSION:-1.0.0}
+  image: ${PAYROLL_IMAGE:-dekelmichpalil.azurecr.io/payroll-onprem}:${BUNDLE_VERSION:-stable}
   pull_policy: missing
   restart: unless-stopped
   env_file: .env
@@ -92,6 +92,8 @@ services:
       GATEWAY_MODE: ${GATEWAY_MODE:-enforce}
       GATEWAY_KINDS: ${GATEWAY_KINDS:-email,id,phone,person,org}
       GATEWAY_ATTACHMENTS: ${GATEWAY_ATTACHMENTS:-block}
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     networks: [internal, egress]
     depends_on:
       mongo: {condition: service_healthy}
@@ -111,6 +113,13 @@ services:
       MONGODB_URI: mongodb://mongo:27017
       MONGODB_DB: ${MONGODB_DB:-payroll}
       METRICS_INSTALL_ID: ${METRICS_INSTALL_ID:?set METRICS_INSTALL_ID in .env}
+      # Which copy of this install, and where it answers. Both reach the
+      # container through `env_file` anyway; they are named here because a
+      # telemetry row that cannot say which box and which environment it came
+      # from is a row nobody can act on, and that should not depend on an
+      # inherited variable somebody could remove without noticing.
+      METRICS_ENVIRONMENT: ${METRICS_ENVIRONMENT:-production}
+      METRICS_SITE_ADDRESS: ${METRICS_SITE_ADDRESS:-${SITE_ADDRESS:-}}
       METRICS_CONTROL_PLANE_URL: ${METRICS_CONTROL_PLANE_URL:-}
       METRICS_INSTALL_TOKEN: ${METRICS_INSTALL_TOKEN:-}
       METRICS_HASH_SALT: ${METRICS_HASH_SALT:-}
@@ -121,6 +130,8 @@ services:
       BETTERSTACK_INGEST_HOST: ${BETTERSTACK_INGEST_HOST:-}
       BETTERSTACK_SOURCE_TOKEN: ${BETTERSTACK_SOURCE_TOKEN:-}
       BETTERSTACK_HEARTBEAT_URL: ${BETTERSTACK_HEARTBEAT_URL:-}
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     networks: [internal, egress]
     depends_on:
       mongo: {condition: service_healthy}
@@ -163,6 +174,8 @@ services:
       CONSOLE_DATA_DIR: /var/lib/payroll/console
     volumes:
       - console-files:/var/lib/payroll/console
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     networks: [internal]
     depends_on:
       mongo: {condition: service_healthy}
@@ -180,6 +193,8 @@ services:
       <<: *app-env
       SERVICE: admin
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?set INTERNAL_TOKEN in .env}
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     networks: [internal]
     depends_on:
       mongo: {condition: service_healthy}
@@ -203,6 +218,8 @@ services:
       PORTAL_FILE_KEK: ${PORTAL_FILE_KEK:?set PORTAL_FILE_KEK in .env}
     volumes:
       - portal-files:/var/lib/payroll/portal
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     networks: [internal]
     depends_on:
       mongo: {condition: service_healthy}
@@ -232,6 +249,8 @@ services:
       AGENT_PORT: "8080"
       AGENT_WEBHOOK_TOKEN: ${INTERNAL_TOKEN:?set INTERNAL_TOKEN in .env}
       PAYROLL_ADMIN_URL: http://admin:3300
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     networks: [internal]
     depends_on:
       mongo: {condition: service_healthy}
@@ -262,6 +281,8 @@ services:
       CONSOLE_URL: http://console:3201
       ADMIN_INTERNAL_URL: http://admin:3300
       SCHEDULER_JOBS: ${SCHEDULER_JOBS:-}
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     networks: [internal]
     depends_on:
       portal: {condition: service_started}
@@ -301,7 +322,7 @@ services:
 
   michpal-worker:
     profiles: [michpal]
-    image: ${MICHPAL_IMAGE:-dekelmichpalil.azurecr.io/payroll-michpal-worker}:${BUNDLE_VERSION:-1.0.0}
+    image: ${MICHPAL_IMAGE:-dekelmichpalil.azurecr.io/payroll-michpal-worker}:${BUNDLE_VERSION:-stable}
     pull_policy: missing
     restart: unless-stopped
     env_file: .env
@@ -337,6 +358,15 @@ services:
       RDP_PASS: ${RDP_PASS:-}
     volumes:
       - michpal-artifacts:/var/lib/michpal/artifacts
+    labels:
+      # OFF by default, and this is the one exception worth arguing for. The
+      # connector holds a single RDP session and keeps its job state in memory,
+      # so restarting it under an unattended update ends whatever payroll run was
+      # in flight — and the run reports nothing, because the process recording it
+      # is the one that went away. A stale connector is recoverable on a Tuesday
+      # morning; a lost payroll run is not. `./install.sh update` restarts it
+      # deliberately, when somebody is watching.
+      com.centurylinklabs.watchtower.enable: "${AUTO_UPDATE_CONNECTOR:-false}"
     # `lan` is a routable bridge — the Windows box is on the office LAN, which
     # `internal` deliberately cannot reach. This is the one documented hole in
     # the no-egress property, and it is the price of driving a desktop: the
@@ -413,6 +443,57 @@ services:
       console: {condition: service_started}
       admin: {condition: service_started}
       portal: {condition: service_started}
+
+  # ── Unattended updates ─────────────────────────────────────────────────────
+  #
+  # Polls the registry every ten minutes and restarts a service when its image
+  # has moved. Three things about how it is configured are decisions rather than
+  # defaults:
+  #
+  # **It watches a channel, not a version.** A digest only changes for a tag we
+  # re-push, so `BUNDLE_VERSION=1.0.0` would never update — an immutable version
+  # and an automatic update are opposite requests. `stable` is the tag we move
+  # when a release is blessed, which keeps the customer on something we chose
+  # rather than on whatever built last.
+  #
+  # **It only touches what is labelled.** `--label-enable` means Mongo is never
+  # restarted by a robot: a database upgrade is a data migration, and one that
+  # happens at 03:00 because an image moved is the failure this whole bundle is
+  # arranged to avoid. Caddy and guacd are pinned upstream images and are left
+  # alone for the same reason.
+  #
+  # **It has the Docker socket, and that is a real cost.** Anything holding this
+  # socket can start a privileged container, so it is root on the host in
+  # practice — on a machine holding payroll data that is worth saying out loud
+  # rather than burying. It buys unattended security patching, which for a box
+  # nobody logs into is usually the larger risk. A bureau that disagrees sets
+  # `AUTO_UPDATE=monitor` (it reports and changes nothing) or stops the
+  # container; `./install.sh update` then does the same job by hand.
+  watchtower:
+    image: containrrr/watchtower:1.7.1
+    restart: unless-stopped
+    command: --interval ${AUTO_UPDATE_INTERVAL:-600} --label-enable --cleanup --rolling-restart
+    environment:
+      # `monitor` reports what it would have done and does nothing.
+      WATCHTOWER_MONITOR_ONLY: ${AUTO_UPDATE_MONITOR_ONLY:-false}
+      # One image backs seven containers, so an update restarts all of them.
+      # Rolling keeps the console answering while the others cycle.
+      WATCHTOWER_INCLUDE_RESTARTING: "true"
+      WATCHTOWER_TIMEOUT: 60s
+      # Watchtower 1.7.1 negotiates Docker API 1.25 by default, and any daemon
+      # from Engine 25 on refuses it outright — "client version 1.25 is too old".
+      # It then logs that error every poll for ever, which reads as an updater
+      # that is running and is in fact doing nothing at all. 1.41 is old enough
+      # for every Engine version this bundle supports.
+      DOCKER_API_VERSION: ${DOCKER_API_VERSION:-1.41}
+      TZ: ${TZ:-Asia/Jerusalem}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    # `egress` to reach the registry. NOT `internal` — it has no business
+    # talking to the applications or the database, and giving it a route it does
+    # not need to a process that already holds the Docker socket would be
+    # careless.
+    networks: [egress]
 
 networks:
   # No gateway route is installed on this network. A container attached only to
