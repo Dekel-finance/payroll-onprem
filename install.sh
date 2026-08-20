@@ -215,10 +215,10 @@ cmd_install() {
   set -a && . "$ENV_FILE" && set +a
 
   step "Pulling the images"
-  if ! docker pull -q "${PAYROLL_IMAGE:-$REGISTRY/payroll-onprem}:${BUNDLE_VERSION:-1.0.0}" >/dev/null 2>&1; then
-    warn "the registry refused an anonymous pull — log in with the credentials we sent you:"
-    say  "    docker login $REGISTRY -u <username>"
-    die  "then run ./install.sh install again"
+  # No credentials: the registry serves these anonymously. If this ever fails,
+  # it is the network between here and the registry, not a login.
+  if ! docker pull -q "${PAYROLL_IMAGE:-$REGISTRY/payroll-onprem}:${BUNDLE_VERSION:-1.0.0}"; then
+    die "could not reach $REGISTRY — check the proxy or firewall, then run ./install.sh install again"
   fi
   ok "images are local"
 

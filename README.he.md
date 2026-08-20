@@ -29,7 +29,6 @@
 - **גישה יוצאת ב-HTTPS** לשני שרתים בלבד, וללא שום גישה נכנסת מהאינטרנט:
   `dekelmichpalil.azurecr.io` (הורדת התוכנה) ו-`api.anthropic.com` (ספק המודל,
   שאליו ניגש רק השער).
-- **פרטי גישה למאגר התמונות** — נשלח לכם שם משתמש וסיסמה.
 - **מפתח לספק המודל**, או שנספק אחד.
 - *לא חובה:* **מכונת ה-Windows שמריצה מיכפל**, נגישה מהשרת הזה בפורט 3389. בלעדיה
   כל השאר עובד; המחבר פשוט לא יעלה.
@@ -50,7 +49,6 @@
 git clone https://github.com/aviram-wba/payroll-onprem.git
 cd payroll-onprem
 
-docker login dekelmichpalil.azurecr.io -u <username>   # הפרטים ששלחנו
 ./install.sh install
 ```
 

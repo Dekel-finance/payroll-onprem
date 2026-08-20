@@ -28,7 +28,6 @@ You also need:
 - **Outbound HTTPS** to two hosts, and no inbound access from the internet at
   all: `dekelmichpalil.azurecr.io` (to download the software) and
   `api.anthropic.com` (the model vendor, reached only by the gateway).
-- **A registry login** — we send you a username and password for the first one.
 - **A model vendor key**, or ask us to supply one.
 - *Optional:* the **Windows machine running מיכפל**, reachable from this server
   on port 3389. Without it everything else still works; the connector simply
@@ -50,7 +49,6 @@ It reports what is missing and writes nothing.
 git clone https://github.com/aviram-wba/payroll-onprem.git
 cd payroll-onprem
 
-docker login dekelmichpalil.azurecr.io -u <username>   # credentials we sent you
 ./install.sh install
 ```
 
