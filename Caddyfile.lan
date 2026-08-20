@@ -1,0 +1,41 @@
+# The default certificate: Caddy's own CA.
+#
+# A bureau's server has a name like `payroll.office.local` or no name at all,
+# just an address on the LAN. Let's Encrypt cannot issue for either — it has to
+# reach the host from the internet, which is the whole thing an on-prem install
+# is avoiding. So Caddy runs a small certificate authority of its own and issues
+# from it.
+#
+# That costs one step, once: each staff machine has to trust the CA, or the
+# browser shows a warning. The certificate is written to the `caddy-data`
+# volume; export it with
+#
+#     docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt .
+#
+# and install it as a trusted root. The README has the per-platform steps.
+#
+# The alternative is plain HTTP, and plain HTTP does not work here: all three
+# apps mark the session cookie `Secure` in production, and a browser silently
+# discards a Secure cookie that arrived over http://. The login page would take
+# the password, redirect, and come back to itself for ever.
+
+{
+	# Nothing is fetched from a public CA in this mode, so the ACME machinery is
+	# left switched off rather than failing in the background every few minutes.
+	auto_https disable_redirects
+}
+
+https://{$SITE_ADDRESS}:{$CONSOLE_PORT} {
+	tls internal
+	reverse_proxy console:3201
+}
+
+https://{$SITE_ADDRESS}:{$ADMIN_PORT} {
+	tls internal
+	reverse_proxy admin:3300
+}
+
+https://{$SITE_ADDRESS}:{$PORTAL_PORT} {
+	tls internal
+	reverse_proxy portal:3400
+}

@@ -1,0 +1,40 @@
+# TLS for an install reachable over a PUBLIC hostname — Let's Encrypt.
+#
+# Select it with `CADDYFILE=Caddyfile.public` in .env. The default is
+# `Caddyfile.lan`, which issues from Caddy's own CA and is the only thing that
+# works on a bureau's own network. Use this one when the host has a real DNS
+# name that resolves from the internet and port 80 is reachable for the ACME
+# challenge.
+#
+# The three apps set their session cookie `Secure` whenever NODE_ENV is
+# production — which it always is in this image. A browser silently DISCARDS a
+# Secure cookie delivered over http://, so on plain HTTP the login form accepts
+# the password, redirects, and lands back on the login page for ever. TLS is not
+# a hardening step here; it is what makes signing in work at all.
+#
+# One certificate, three ports. Each app keeps its own port so the URLs stay
+# distinguishable, rather than being folded onto paths of one host — a Next app
+# mounted under a path prefix needs basePath set at build time.
+
+# No global options block: an `email` directive with an empty value is a parse
+# error rather than a default, and Caddy then restart-loops with every port
+# published and nothing listening. Let's Encrypt issues without a contact
+# address, so the block is simply absent.
+
+https://{$SITE_ADDRESS}:{$CONSOLE_PORT} {
+	reverse_proxy console:3201
+}
+
+https://{$SITE_ADDRESS}:{$ADMIN_PORT} {
+	reverse_proxy admin:3300
+}
+
+https://{$SITE_ADDRESS}:{$PORTAL_PORT} {
+	reverse_proxy portal:3400
+}
+
+# Anything arriving on plain 80 that is not an ACME challenge goes to the
+# console over TLS, so a bare hostname in a browser lands somewhere useful.
+http://{$SITE_ADDRESS} {
+	redir https://{$SITE_ADDRESS}:{$CONSOLE_PORT}{uri}
+}

@@ -1,0 +1,4 @@
+# The install's secrets. Two of the keys in it seal data at rest — this file
+# must never reach a repository, and it is the one thing to back up by hand.
+.env
+backups/
