@@ -27,15 +27,60 @@
 
 https://{$SITE_ADDRESS}:{$CONSOLE_PORT} {
 	tls internal
-	reverse_proxy console:3201
+	reverse_proxy console:3201 {
+	# Hold the request instead of failing it while a container is being replaced.
+	#
+	# Measured: recreating one app container costs 1.6 seconds during which Caddy
+	# has nothing to talk to and answers 502. That is short, and 502 is still the
+	# wrong answer — an unattended update should not put an error in front of
+	# somebody who was mid-task. Caddy retries for up to 30s at 250ms intervals,
+	# so the request that lands in the gap simply takes about two seconds longer
+	# and then succeeds.
+	#
+	# Only retried when NO response was received, which is Caddy's default and
+	# the reason this is safe for a POST as well: a request the app already began
+	# answering is never sent twice.
+	lb_try_duration 30s
+	lb_try_interval 250ms
+}
 }
 
 https://{$SITE_ADDRESS}:{$ADMIN_PORT} {
 	tls internal
-	reverse_proxy admin:3300
+	reverse_proxy admin:3300 {
+	# Hold the request instead of failing it while a container is being replaced.
+	#
+	# Measured: recreating one app container costs 1.6 seconds during which Caddy
+	# has nothing to talk to and answers 502. That is short, and 502 is still the
+	# wrong answer — an unattended update should not put an error in front of
+	# somebody who was mid-task. Caddy retries for up to 30s at 250ms intervals,
+	# so the request that lands in the gap simply takes about two seconds longer
+	# and then succeeds.
+	#
+	# Only retried when NO response was received, which is Caddy's default and
+	# the reason this is safe for a POST as well: a request the app already began
+	# answering is never sent twice.
+	lb_try_duration 30s
+	lb_try_interval 250ms
+}
 }
 
 https://{$SITE_ADDRESS}:{$PORTAL_PORT} {
 	tls internal
-	reverse_proxy portal:3400
+	reverse_proxy portal:3400 {
+	# Hold the request instead of failing it while a container is being replaced.
+	#
+	# Measured: recreating one app container costs 1.6 seconds during which Caddy
+	# has nothing to talk to and answers 502. That is short, and 502 is still the
+	# wrong answer — an unattended update should not put an error in front of
+	# somebody who was mid-task. Caddy retries for up to 30s at 250ms intervals,
+	# so the request that lands in the gap simply takes about two seconds longer
+	# and then succeeds.
+	#
+	# Only retried when NO response was received, which is Caddy's default and
+	# the reason this is safe for a POST as well: a request the app already began
+	# answering is never sent twice.
+	lb_try_duration 30s
+	lb_try_interval 250ms
+}
 }
