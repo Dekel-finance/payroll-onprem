@@ -472,12 +472,16 @@ services:
   watchtower:
     image: containrrr/watchtower:1.7.1
     restart: unless-stopped
-    command: --interval ${AUTO_UPDATE_INTERVAL:-600} --label-enable --cleanup --rolling-restart
+    # No --rolling-restart. It is fatal in combination with monitor-only —
+    # "Rolling restarts is not compatible with the global monitor only flag" —
+    # so the documented way to opt out of unattended updates would have put the
+    # updater into a crash loop. It bought little anyway: all seven containers
+    # run the SAME image, so they restart within a few seconds of each other
+    # whichever order they go in.
+    command: --interval ${AUTO_UPDATE_INTERVAL:-600} --label-enable --cleanup
     environment:
       # `monitor` reports what it would have done and does nothing.
       WATCHTOWER_MONITOR_ONLY: ${AUTO_UPDATE_MONITOR_ONLY:-false}
-      # One image backs seven containers, so an update restarts all of them.
-      # Rolling keeps the console answering while the others cycle.
       WATCHTOWER_INCLUDE_RESTARTING: "true"
       WATCHTOWER_TIMEOUT: 60s
       # Watchtower 1.7.1 negotiates Docker API 1.25 by default, and any daemon
