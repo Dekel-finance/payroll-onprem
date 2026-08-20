@@ -10,7 +10,7 @@ any text reaches a model vendor, and puts the real values back in the answer.
 The applications are on a Docker network with no route out at all — not by
 policy, by construction: a call that skipped the gateway would fail to resolve.
 
-[עברית](README.he.md) · [Full illustrated guide](https://claude.ai/public/artifacts/) · Version 1.0.0
+[עברית](README.he.md) · [Illustrated guide](https://claude.ai/code/artifact/079fe08c-c7e7-43ec-9044-47818f06fbd0) · Version 1.0.0
 
 ---
 
@@ -47,7 +47,7 @@ It reports what is missing and writes nothing.
 ## Install
 
 ```bash
-git clone https://github.com/YOUR-ORG/payroll-onprem.git
+git clone https://github.com/aviram-wba/payroll-onprem.git
 cd payroll-onprem
 
 docker login dekelmichpalil.azurecr.io -u <username>   # credentials we sent you

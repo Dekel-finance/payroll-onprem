@@ -11,7 +11,7 @@
 החוצה כלל — לא בגלל מדיניות אלא במבנה: קריאה שתעקוף את השער פשוט לא תצליח
 להתחבר.
 
-[English](README.md) · גרסה 1.0.0
+[English](README.md) · [מדריך מאויר](https://claude.ai/code/artifact/079fe08c-c7e7-43ec-9044-47818f06fbd0) · גרסה 1.0.0
 
 ---
 
@@ -47,7 +47,7 @@
 ## התקנה
 
 ```bash
-git clone https://github.com/YOUR-ORG/payroll-onprem.git
+git clone https://github.com/aviram-wba/payroll-onprem.git
 cd payroll-onprem
 
 docker login dekelmichpalil.azurecr.io -u <username>   # הפרטים ששלחנו
