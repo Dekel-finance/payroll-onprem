@@ -2,3 +2,4 @@
 # must never reach a repository, and it is the one thing to back up by hand.
 .env
 backups/
+.vercel

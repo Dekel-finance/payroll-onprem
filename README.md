@@ -10,7 +10,7 @@ any text reaches a model vendor, and puts the real values back in the answer.
 The applications are on a Docker network with no route out at all — not by
 policy, by construction: a call that skipped the gateway would fail to resolve.
 
-[עברית](README.he.md) · [Illustrated guide](https://claude.ai/code/artifact/079fe08c-c7e7-43ec-9044-47818f06fbd0) · Version 1.0.0
+[עברית](README.he.md) · [Illustrated guide](https://onprem.dekel.io) · Version 1.1.0
 
 ---
 
@@ -155,7 +155,7 @@ restart:
 
 ```bash
 AUTO_UPDATE_MONITOR_ONLY=true   # it reports what it would do, and does nothing
-BUNDLE_VERSION=1.0.0            # pin an exact version; updates never fire
+BUNDLE_VERSION=1.1.0            # pin an exact version; updates never fire
 ```
 
 Either way `./install.sh update` applies the current release immediately.
