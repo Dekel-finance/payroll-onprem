@@ -46,7 +46,7 @@
 ## התקנה
 
 ```bash
-git clone https://github.com/aviram-wba/payroll-onprem.git
+git clone https://github.com/Dekel-finance/payroll-onprem.git
 cd payroll-onprem
 
 ./install.sh install
