@@ -1,0 +1,875 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Install and run the Dekel payroll platform on your own server: the database, console, back office, employee portal and Michpal connector, on hardware you own.">
+<meta name="robots" content="index,follow">
+<title>Dekel On-Prem Setup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700&family=Assistant:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  /* ── Tokens ───────────────────────────────────────────────────────────────
+     Light is the base and complete. Dark redefines tokens only, twice: once
+     for the un-stamped system default, once for the explicit toggle. No
+     component rule ever lives inside a theme block. */
+  :root {
+    --paper:      #FBFAF6;
+    --surface:    #FFFFFF;
+    --sunk:       #F1EFE9;
+    --line:       #DFDCD3;
+    --line-soft:  #EAE7E0;
+    --ink:        #191E1C;   /* near-black, biased green — chosen, not inherited */
+    --ink-soft:   #4E5651;
+    --ink-faint:  #7E867F;
+    --accent:     #1F6F5C;   /* sealed green: the ledger, the cleared state */
+    --accent-ink: #14503F;
+    --accent-wash:#E7F1ED;
+    --warn:       #8A5A12;   /* the two warnings that are actually warnings */
+    --warn-wash:  #F7EFDF;
+    --crit:       #8E2A2A;
+    --code-bg:    #141A18;
+    --code-ink:   #E4EAE6;
+    --code-dim:   #8FA098;
+    --shadow:     0 1px 2px rgba(25,30,28,.05), 0 8px 24px -16px rgba(25,30,28,.28);
+
+    --measure: 68ch;
+    --step--1: clamp(.82rem, .8rem + .1vw, .875rem);
+    --step-0:  clamp(1rem, .97rem + .16vw, 1.075rem);
+    --step-1:  clamp(1.2rem, 1.13rem + .34vw, 1.4rem);
+    --step-2:  clamp(1.5rem, 1.36rem + .68vw, 1.95rem);
+    --step-3:  clamp(2rem, 1.7rem + 1.5vw, 3rem);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:      #101413;
+      --surface:    #161B1A;
+      --sunk:       #1B2220;
+      --line:       #2B3432;
+      --line-soft:  #232B29;
+      --ink:        #E3E9E5;
+      --ink-soft:   #A7B2AC;
+      --ink-faint:  #77827C;
+      --accent:     #5FBFA3;
+      --accent-ink: #8FD8C1;
+      --accent-wash:#152A24;
+      --warn:       #D9A855;
+      --warn-wash:  #2A2214;
+      --crit:       #E08585;
+      --code-bg:    #0B0F0E;
+      --code-ink:   #DCE5E0;
+      --code-dim:   #7C8D85;
+      --shadow:     0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:      #101413;
+    --surface:    #161B1A;
+    --sunk:       #1B2220;
+    --line:       #2B3432;
+    --line-soft:  #232B29;
+    --ink:        #E3E9E5;
+    --ink-soft:   #A7B2AC;
+    --ink-faint:  #77827C;
+    --accent:     #5FBFA3;
+    --accent-ink: #8FD8C1;
+    --accent-wash:#152A24;
+    --warn:       #D9A855;
+    --warn-wash:  #2A2214;
+    --crit:       #E08585;
+    --code-bg:    #0B0F0E;
+    --code-ink:   #DCE5E0;
+    --code-dim:   #7C8D85;
+    --shadow:     0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Assistant", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: var(--step-0);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Masthead ───────────────────────────────────────────────────────────── */
+  .bar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 1rem;
+    padding: .7rem clamp(1rem, 4vw, 2.5rem);
+    background: color-mix(in srgb, var(--paper) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .mark {
+    font-family: "Frank Ruhl Libre", Georgia, serif;
+    font-weight: 700; font-size: 1.02rem; letter-spacing: -.01em;
+  }
+  .mark span { color: var(--accent); }
+  .bar-spacer { flex: 1; }
+  .ver {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: var(--step--1); color: var(--ink-faint);
+  }
+  .langs { display: flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+  .langs button {
+    font: inherit; font-size: var(--step--1); font-weight: 600;
+    padding: .3rem .85rem; border: 0; cursor: pointer;
+    background: transparent; color: var(--ink-soft);
+  }
+  .langs button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  :root[data-theme="dark"] .langs button[aria-pressed="true"],
+  .langs button[aria-pressed="true"] { color: var(--paper); }
+  .langs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+  main { padding: 0 clamp(1rem, 4vw, 2.5rem) 6rem; }
+  .wrap { max-width: var(--measure); margin-inline: auto; }
+
+  /* ── Opening ────────────────────────────────────────────────────────────── */
+  .hero { padding: clamp(2.5rem, 7vw, 5rem) 0 2rem; }
+  .eyebrow {
+    font-size: var(--step--1); font-weight: 700; letter-spacing: .09em;
+    text-transform: uppercase; color: var(--accent);
+    margin: 0 0 .9rem;
+  }
+  [dir="rtl"] .eyebrow { letter-spacing: .04em; }
+  h1 {
+    font-family: "Frank Ruhl Libre", Georgia, serif;
+    font-weight: 700; font-size: var(--step-3); line-height: 1.08;
+    letter-spacing: -.02em; text-wrap: balance;
+    margin: 0 0 1rem;
+  }
+  .lede { font-size: var(--step-1); color: var(--ink-soft); margin: 0; text-wrap: pretty; }
+
+  h2 {
+    font-family: "Frank Ruhl Libre", Georgia, serif;
+    font-weight: 700; font-size: var(--step-2); line-height: 1.15;
+    letter-spacing: -.015em; text-wrap: balance;
+    margin: 0 0 .6rem;
+  }
+  h3 {
+    font-size: var(--step-1); font-weight: 700; line-height: 1.25;
+    text-wrap: balance; margin: 2rem 0 .5rem;
+  }
+  p { margin: 0 0 1rem; text-wrap: pretty; }
+  a { color: var(--accent-ink); text-underline-offset: 2px; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+  strong { font-weight: 700; }
+
+  /* ── Steps: numbered because the install genuinely is a sequence ─────────── */
+  .step {
+    display: grid; grid-template-columns: 2.6rem 1fr; gap: 0 1.25rem;
+    padding: 2.5rem 0; border-top: 1px solid var(--line-soft);
+  }
+  .step-n {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: var(--step--1); font-weight: 500;
+    color: var(--accent); padding-top: .55rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .step-body { min-width: 0; }
+  .plain { padding: 2.5rem 0; border-top: 1px solid var(--line-soft); }
+
+  /* ── Code ───────────────────────────────────────────────────────────────── */
+  .code {
+    position: relative; margin: 1.1rem 0 1.25rem;
+    background: var(--code-bg); border-radius: 8px;
+    box-shadow: var(--shadow);
+  }
+  .code pre {
+    margin: 0; padding: 1rem 1.1rem; overflow-x: auto;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: var(--step--1); line-height: 1.75;
+    color: var(--code-ink);
+    direction: ltr; text-align: left;
+  }
+  .code .c { color: var(--code-dim); }
+  .copy {
+    position: absolute; inset-block-start: .5rem; inset-inline-end: .5rem;
+    font: inherit; font-size: .72rem; font-weight: 600;
+    letter-spacing: .05em; text-transform: uppercase;
+    padding: .28rem .6rem; border-radius: 5px; cursor: pointer;
+    background: rgba(255,255,255,.08); color: var(--code-dim);
+    border: 1px solid rgba(255,255,255,.12);
+  }
+  .copy:hover { color: var(--code-ink); background: rgba(255,255,255,.14); }
+  .copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .89em; background: var(--sunk);
+    padding: .1em .35em; border-radius: 4px;
+    border: 1px solid var(--line-soft);
+    direction: ltr; unicode-bidi: embed;
+  }
+
+  /* ── Callouts. Two kinds, and the difference is real: one explains, one
+        is a thing you can lose data by ignoring. ───────────────────────────── */
+  .note, .warn {
+    border-inline-start: 3px solid var(--accent);
+    background: var(--accent-wash);
+    padding: 1rem 1.15rem; border-radius: 0 6px 6px 0;
+    margin: 1.25rem 0;
+  }
+  [dir="rtl"] .note, [dir="rtl"] .warn { border-radius: 6px 0 0 6px; }
+  .warn { border-inline-start-color: var(--warn); background: var(--warn-wash); }
+  .note p:last-child, .warn p:last-child { margin-bottom: 0; }
+  .note-h, .warn-h {
+    font-size: var(--step--1); font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--accent-ink);
+    margin: 0 0 .4rem;
+  }
+  [dir="rtl"] .note-h, [dir="rtl"] .warn-h { letter-spacing: .02em; }
+  .warn-h { color: var(--warn); }
+
+  /* ── Tables ─────────────────────────────────────────────────────────────── */
+  .tw { overflow-x: auto; margin: 1.25rem 0; }
+  table { border-collapse: collapse; width: 100%; font-size: var(--step--1); }
+  th, td { text-align: start; padding: .6rem .8rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  th {
+    font-weight: 700; font-size: .78rem; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--ink-faint);
+    border-bottom-color: var(--line);
+  }
+  [dir="rtl"] th { letter-spacing: .02em; }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  ul, ol { margin: 0 0 1rem; padding-inline-start: 1.3rem; }
+  li { margin-bottom: .45rem; }
+  li::marker { color: var(--ink-faint); }
+
+  /* ── The boundary diagram ───────────────────────────────────────────────── */
+  .fig { margin: 1.75rem 0; }
+  .fig svg { width: 100%; height: auto; display: block; }
+  .cap {
+    font-size: var(--step--1); color: var(--ink-faint);
+    margin-top: .6rem; text-align: center;
+  }
+  .b-box { fill: var(--surface); stroke: var(--line); }
+  .b-seal { fill: none; stroke: var(--accent); stroke-dasharray: 5 4; }
+  .b-gate { fill: var(--accent-wash); stroke: var(--accent); }
+  .b-out { fill: var(--sunk); stroke: var(--line); }
+  .b-t { fill: var(--ink); font-family: "Assistant", sans-serif; font-size: 12px; font-weight: 600; }
+  .b-s { fill: var(--ink-faint); font-family: "Assistant", sans-serif; font-size: 10.5px; }
+  .b-l { stroke: var(--ink-faint); }
+  .b-x { stroke: var(--crit); }
+
+  footer {
+    border-top: 1px solid var(--line-soft); margin-top: 2rem;
+    padding: 2rem 0 0; color: var(--ink-faint); font-size: var(--step--1);
+  }
+
+  [hidden] { display: none !important; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="mark">Dekel<span>.</span></div>
+  <div class="bar-spacer"></div>
+  <div class="ver">v1.1.0</div>
+  <div class="langs" role="group" aria-label="Language">
+    <button type="button" id="btn-en" aria-pressed="true">EN</button>
+    <button type="button" id="btn-he" aria-pressed="false">עברית</button>
+  </div>
+</div>
+
+<main>
+
+<!-- ══════════════════════════ ENGLISH ══════════════════════════ -->
+<div id="lang-en" class="wrap">
+
+  <header class="hero">
+    <p class="eyebrow">Installation guide</p>
+    <h1>Run the payroll platform on your own server</h1>
+    <p class="lede">The database, the console, the back office, the employee portal and the
+      מיכפל connector — all on hardware you own. About twenty minutes, most of it downloading.</p>
+  </header>
+
+  <section class="plain">
+    <h2>What you are installing</h2>
+    <p>Ten containers on one machine. The six that hold your data — the console, the back
+      office, the portal, the agent, the scheduler and the database — sit on a Docker network with
+      <strong>no route to the internet at all</strong>: not as a policy, but as a fact of how the
+      network is built. A call that tried to skip the gateway would fail to resolve rather than
+      leak. Only four containers can reach out at all — the gateway, the telemetry reporter, the
+      certificate proxy and the updater.</p>
+
+    <div class="fig">
+      <svg viewBox="0 0 660 250" role="img" aria-label="The applications sit inside a sealed network. Only the gateway can reach a model vendor, and it replaces identifying values first.">
+        <rect class="b-seal" x="8" y="8" width="420" height="234" rx="10"/>
+        <text class="b-s" x="24" y="30">your building — no route to the internet</text>
+
+        <rect class="b-box" x="30" y="48" width="112" height="38" rx="6"/>
+        <text class="b-t" x="48" y="72">Console</text>
+        <rect class="b-box" x="30" y="96" width="112" height="38" rx="6"/>
+        <text class="b-t" x="55" y="120">Admin</text>
+        <rect class="b-box" x="30" y="144" width="112" height="38" rx="6"/>
+        <text class="b-t" x="55" y="168">Portal</text>
+        <rect class="b-box" x="30" y="192" width="112" height="38" rx="6"/>
+        <text class="b-t" x="47" y="216">Database</text>
+
+        <path class="b-l" d="M142 115 H228" stroke-width="1.5" fill="none" marker-end="url(#a)"/>
+        <rect class="b-gate" x="232" y="86" width="120" height="58" rx="8"/>
+        <text class="b-t" x="262" y="110">Gateway</text>
+        <text class="b-s" x="245" y="128">reads &amp; replaces</text>
+
+        <path class="b-x" d="M170 205 H250" stroke-width="1.5" fill="none"/>
+        <path class="b-x" d="M204 195 l16 20 M220 195 l-16 20" stroke-width="1.5"/>
+        <text class="b-s" x="258" y="209">a call that skipped it cannot connect</text>
+
+        <path class="b-l" d="M352 115 H520" stroke-width="1.5" fill="none" marker-end="url(#a)"/>
+        <rect class="b-out" x="524" y="86" width="120" height="58" rx="8"/>
+        <text class="b-t" x="548" y="110">Model</text>
+        <text class="b-t" x="548" y="128">vendor</text>
+        <text class="b-s" x="368" y="106">[PII:ID:1]</text>
+        <text class="b-s" x="368" y="136">never a name</text>
+
+        <defs>
+          <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="currentColor" style="color: var(--ink-faint)"/>
+          </marker>
+        </defs>
+      </svg>
+      <p class="cap">Identifying values are replaced before anything leaves, and restored in the answer.</p>
+    </div>
+  </section>
+
+  <section class="plain">
+    <h2>Before you start</h2>
+    <div class="tw">
+      <table>
+        <thead><tr><th>&nbsp;</th><th>Minimum</th><th>Comfortable</th></tr></thead>
+        <tbody>
+          <tr><td>CPU</td><td class="num">4 cores</td><td class="num">8 cores</td></tr>
+          <tr><td>RAM</td><td class="num">8 GB</td><td class="num">16 GB</td></tr>
+          <tr><td>Disk</td><td class="num">40 GB free</td><td class="num">100 GB SSD</td></tr>
+          <tr><td>OS</td><td>Linux, Docker Engine 24+, Compose v2.20+</td><td>Ubuntu 22.04 / 24.04 LTS</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Outbound HTTPS to exactly two hosts, and <strong>no inbound access from the internet at all</strong>:</p>
+    <ul>
+      <li><code>dekelmichpalil.azurecr.io</code> — where the software is downloaded from.</li>
+      <li><code>api.anthropic.com</code> — the model vendor, reached only by the gateway.</li>
+    </ul>
+    <p>No credentials are needed to download the software — the images are served publicly and
+      carry no source code. You will need a model vendor key (or ask us to supply one), and —
+      only if you want the connector — the Windows machine running מיכפל, reachable from this
+      server on port 3389.</p>
+  </section>
+
+  <section class="step">
+    <div class="step-n">01</div>
+    <div class="step-body">
+      <h2>Check the machine</h2>
+      <p>This writes nothing. It reports what is missing and stops.</p>
+      <div class="code"><button class="copy" type="button">Copy</button><pre><span class="c"># download the kit</span>
+git clone https://github.com/Dekel-finance/payroll-onprem.git
+cd payroll-onprem
+
+./install.sh check</pre></div>
+      <p>It checks Docker and Compose versions, cores, memory, free disk, the two hostnames above,
+        and whether the three ports are free. Anything marked <code>!</code> has to be fixed first.</p>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-n">02</div>
+    <div class="step-body">
+      <h2>Install</h2>
+      <div class="code"><button class="copy" type="button">Copy</button><pre>./install.sh install</pre></div>
+      <p>It asks for an email address and a password for the first administrator, then prints the
+        three addresses to open. Running it again is safe — it repairs a half-finished install
+        rather than starting a second one.</p>
+      <div class="note">
+        <p class="note-h">The install comes up empty</p>
+        <p>No clients, no employees, no payslips. Your records arrive through onboarding and the
+          sync from your payroll system. An install that arrived pre-filled would be rows you had
+          to identify and delete before you could trust anything on the screen.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-n">03</div>
+    <div class="step-body">
+      <h2>Back up the key file</h2>
+      <p>The installer writes one file, <code>.env</code>, holding this install's secrets.</p>
+      <div class="warn">
+        <p class="warn-h">Do this before you go further</p>
+        <p>Two of the keys in <code>.env</code> seal data at rest: one encrypts every employee
+          document, the other is what makes an identity number readable. <strong>If the file is
+          lost, the data in the volumes cannot be recovered</strong> — not by us, not by anyone.
+          That is the design, and it is irreversible. Copy it somewhere that is not this machine.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-n">04</div>
+    <div class="step-body">
+      <h2>Open it, and trust the certificate</h2>
+      <div class="tw">
+        <table>
+          <thead><tr><th>&nbsp;</th><th>Address</th><th>Who uses it</th></tr></thead>
+          <tbody>
+            <tr><td>Console</td><td><code>https://&lt;server&gt;:4201</code></td><td>the payroll office</td></tr>
+            <tr><td>Admin</td><td><code>https://&lt;server&gt;:4301</code></td><td>settings, users, connectors</td></tr>
+            <tr><td>Portal</td><td><code>https://&lt;server&gt;:4401</code></td><td>employees</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>On the first visit the browser warns that the certificate is not trusted. It is issued by a
+        small certificate authority running inside your own install, because a public authority like
+        Let's Encrypt cannot issue for a name on a private network — it has to reach the server from
+        the internet, which is exactly what this deployment avoids.</p>
+      <p>Fix it once, per machine. Export the root certificate:</p>
+      <div class="code"><button class="copy" type="button">Copy</button><pre>docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt .</pre></div>
+      <p>Then install it as a trusted root authority:</p>
+      <ul>
+        <li><strong>Windows</strong> — double-click <code>root.crt</code> → Install Certificate →
+          Local Machine → Place all certificates in the following store → <em>Trusted Root
+          Certification Authorities</em>. Group Policy can push it to every machine at once.</li>
+        <li><strong>macOS</strong> — open in Keychain Access → System → set to <em>Always Trust</em>.</li>
+        <li><strong>Linux</strong> — copy to <code>/usr/local/share/ca-certificates/</code> and run
+          <code>sudo update-ca-certificates</code>.</li>
+        <li><strong>iOS / Android</strong> — mail the file to the device and install it as a profile.</li>
+      </ul>
+      <div class="note">
+        <p class="note-h">Why plain HTTP is not an option</p>
+        <p>The applications mark their session cookie <code>Secure</code>, and browsers discard a
+          Secure cookie that arrived over <code>http://</code>. Over HTTP the login page accepts the
+          password, redirects, and returns you to the login page — for ever, with no error anywhere.</p>
+      </div>
+      <p>If the server does have a public hostname, set <code>SITE_ADDRESS</code> to it and
+        <code>CADDYFILE=Caddyfile.public</code> in <code>.env</code>; a normal certificate is then
+        obtained automatically, and port 80 must be reachable for the check.</p>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-n">05</div>
+    <div class="step-body">
+      <h2>Connect מיכפל <span style="color:var(--ink-faint);font-weight:400">— optional</span></h2>
+      <p>The connector drives מיכפל over RDP on a Windows machine on your network. In
+        <code>.env</code>, set <code>RDP_HOST</code> to that machine's address and
+        <code>RDP_USER</code> / <code>RDP_PASS</code> to an account that can sign into it, then:</p>
+      <div class="code"><button class="copy" type="button">Copy</button><pre>docker compose --profile michpal up -d</pre></div>
+      <p>One run at a time, deliberately: a Windows machine gives one interactive session per user,
+        and two automations sharing one desktop interfere with each other in ways that are expensive
+        to recover from.</p>
+      <div class="warn">
+        <p class="warn-h">Plan a calibration session</p>
+        <p>The automation recognises screens by their pixels, and it is calibrated against our
+          מיכפל installation. A different version, screen resolution or company book may need
+          recalibrating. Arrange that with us in advance rather than discovering it during a
+          payroll run.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="plain">
+    <h2>Updates</h2>
+    <p>The install checks for a new version <strong>every ten minutes</strong> and applies it on
+      its own. There is nothing to run.</p>
+    <p>It follows the <code>stable</code> channel — the release we have blessed, not whatever built
+      most recently — so an update only happens when we decide one should. What gets restarted is
+      deliberately narrow:</p>
+    <div class="tw">
+      <table>
+        <thead><tr><th>&nbsp;</th><th>Updates by itself</th></tr></thead>
+        <tbody>
+          <tr><td>The applications</td><td><strong>Yes</strong> — a few seconds each, one at a time</td></tr>
+          <tr><td>The database</td><td><strong>Never.</strong> A database upgrade is a data migration, and not something to do unattended at 03:00.</td></tr>
+          <tr><td>The מיכפל connector</td><td><strong>No</strong>, by default — it runs one session at a time and keeps a run's state in memory, so restarting it mid-run would end that payroll run without reporting it.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>To approve every update yourself instead, set one of these in <code>.env</code> and restart.
+      Either way <code>./install.sh update</code> applies the current release immediately.</p>
+    <div class="code"><button class="copy" type="button">Copy</button><pre>AUTO_UPDATE_MONITOR_ONLY=true   <span class="c"># reports what it would do, changes nothing</span>
+BUNDLE_VERSION=1.1.0            <span class="c"># pin a version; updates never fire</span></pre></div>
+    <div class="warn">
+      <p class="warn-h">What the updater is allowed to do</p>
+      <p>It needs access to the Docker service on this machine, which in practice makes it as
+        privileged as the administrator account. That is the cost of unattended security patching
+        on a server nobody logs into. If your security policy does not allow it, use
+        <code>AUTO_UPDATE_MONITOR_ONLY=true</code> and update by hand.</p>
+    </div>
+  </section>
+
+  <section class="plain">
+    <h2>Running it</h2>
+    <div class="code"><button class="copy" type="button">Copy</button><pre>./install.sh status     <span class="c"># what is running, and the addresses</span>
+./install.sh logs       <span class="c"># follow everything; add a service name for one</span>
+./install.sh backup     <span class="c"># database + documents, into ./backups/&lt;timestamp&gt;/</span>
+./install.sh update     <span class="c"># pull a newer version and restart</span>
+./install.sh stop       <span class="c"># stop; your data is untouched</span></pre></div>
+    <h3>Backups</h3>
+    <p><code>backup</code> writes two files: a database dump and an archive of the stored documents.
+      You need both — a database restored without the documents gives you an install where every
+      employee exists and none of their files open.</p>
+    <p>Neither can be read without <code>.env</code>. Keep that copy somewhere else: an archive
+      sitting beside the key that encrypts it is one theft, not two.</p>
+  </section>
+
+  <section class="plain">
+    <h2>What leaves your network</h2>
+    <p>Three things, and nothing else.</p>
+    <ol>
+      <li><strong>Model requests</strong>, through the gateway, with identifying values replaced by
+        placeholders and restored in the answer. Documents are read <em>on this server</em> — a PDF
+        becomes text here, and only the pseudonymised text crosses. What a scan does not yield to
+        OCR is refused rather than forwarded.</li>
+      <li><strong>Aggregate telemetry</strong>, if you enable it: counts, durations, error codes and
+        hashed identifiers. It is checked against an allow-list immediately before sending —
+        anything that is not a number, a timestamp, a hash or a known code is refused, so a name or
+        an error message quoting a screen cannot pass by construction.
+        <code>GET /snapshot</code> on the metrics service shows exactly what would be sent. Leave
+        the <code>BETTERSTACK_*</code> values blank and nothing is reported at all.</li>
+      <li><strong>Image downloads</strong>, when you install or update.</li>
+    </ol>
+    <p>There is no remote access channel. We cannot reach into this install; if you want us to look
+      at something, you send us what you choose to send.</p>
+  </section>
+
+  <section class="plain">
+    <h2>If something is wrong</h2>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Symptom</th><th>Where to look</th></tr></thead>
+        <tbody>
+          <tr><td>The login page returns to itself</td><td>You are on <code>http://</code>. See step 04.</td></tr>
+          <tr><td>"Provision a connector" on a מיכפל action</td><td><code>RDP_HOST</code> is unset, or <code>./install.sh bootstrap</code> has not run.</td></tr>
+          <tr><td>The portal shows nothing on any address</td><td><code>SITE_ADDRESS</code> does not match the hostname you typed. Re-run <code>./install.sh bootstrap</code>.</td></tr>
+          <tr><td>The model refuses a document</td><td><code>GATEWAY_ATTACHMENTS=block</code> and OCR could not read the scan. Use a clearer scan, or set <code>allow</code> knowingly.</td></tr>
+          <tr><td>Reminders never send</td><td><code>./install.sh logs scheduler</code> — it answers 503 when a job has stopped succeeding.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <footer>
+      <p>Support: <strong>support@dekel.finance</strong>. Include the output of
+        <code>./install.sh status</code> and the install id from <code>.env</code>
+        (<code>METRICS_INSTALL_ID</code>).</p>
+    </footer>
+  </section>
+</div>
+
+<!-- ══════════════════════════ עברית ══════════════════════════ -->
+<div id="lang-he" class="wrap" hidden>
+
+  <header class="hero">
+    <p class="eyebrow">מדריך התקנה</p>
+    <h1>הרצת מערכת השכר על השרת שלכם</h1>
+    <p class="lede">מסד הנתונים, הקונסולה, הניהול, פורטל העובדים והמחבר למיכפל — הכל על חומרה
+      בבעלותכם. בערך עשרים דקות, רובן הורדה.</p>
+  </header>
+
+  <section class="plain">
+    <h2>מה מתקינים</h2>
+    <p>עשרה קונטיינרים על מכונה אחת. ששה מהם — הקונסולה, הניהול, הפורטל, הסוכן,
+      המתזמן ומסד הנתונים — יושבים על רשת Docker שאין לה
+      <strong>שום מסלול לאינטרנט</strong> — לא כמדיניות אלא כעובדה במבנה הרשת. קריאה שתנסה
+      לעקוף את השער לא תדלוף; היא פשוט לא תצליח להתחבר. רק ארבעה קונטיינרים יכולים
+      לצאת החוצה — השער, שירות הטלמטריה, שרת התעודות ומנגנון העדכון.</p>
+
+    <div class="fig">
+      <svg viewBox="0 0 660 250" role="img" aria-label="האפליקציות יושבות ברשת אטומה. רק השער מגיע לספק המודל, ורק אחרי שהחליף ערכים מזהים.">
+        <rect class="b-seal" x="8" y="8" width="420" height="234" rx="10"/>
+        <text class="b-s" x="24" y="30" direction="rtl">הבניין שלכם — בלי מסלול לאינטרנט</text>
+        <rect class="b-box" x="30" y="48" width="112" height="38" rx="6"/>
+        <text class="b-t" x="52" y="72" direction="rtl">קונסולה</text>
+        <rect class="b-box" x="30" y="96" width="112" height="38" rx="6"/>
+        <text class="b-t" x="60" y="120" direction="rtl">ניהול</text>
+        <rect class="b-box" x="30" y="144" width="112" height="38" rx="6"/>
+        <text class="b-t" x="58" y="168" direction="rtl">פורטל</text>
+        <rect class="b-box" x="30" y="192" width="112" height="38" rx="6"/>
+        <text class="b-t" x="48" y="216" direction="rtl">מסד נתונים</text>
+
+        <path class="b-l" d="M142 115 H228" stroke-width="1.5" fill="none" marker-end="url(#b)"/>
+        <rect class="b-gate" x="232" y="86" width="120" height="58" rx="8"/>
+        <text class="b-t" x="270" y="110" direction="rtl">שער</text>
+        <text class="b-s" x="248" y="128" direction="rtl">קורא ומחליף</text>
+
+        <path class="b-x" d="M170 205 H250" stroke-width="1.5" fill="none"/>
+        <path class="b-x" d="M204 195 l16 20 M220 195 l-16 20" stroke-width="1.5"/>
+        <text class="b-s" x="258" y="209" direction="rtl">קריאה שעוקפת אותו לא מתחברת</text>
+
+        <path class="b-l" d="M352 115 H520" stroke-width="1.5" fill="none" marker-end="url(#b)"/>
+        <rect class="b-out" x="524" y="86" width="120" height="58" rx="8"/>
+        <text class="b-t" x="556" y="118" direction="rtl">ספק המודל</text>
+        <text class="b-s" x="368" y="106">[PII:ID:1]</text>
+        <text class="b-s" x="368" y="136" direction="rtl">אף פעם לא שם</text>
+
+        <defs>
+          <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="currentColor" style="color: var(--ink-faint)"/>
+          </marker>
+        </defs>
+      </svg>
+      <p class="cap">ערכים מזהים מוחלפים לפני שמשהו יוצא, ומוחזרים בתשובה.</p>
+    </div>
+  </section>
+
+  <section class="plain">
+    <h2>לפני שמתחילים</h2>
+    <div class="tw">
+      <table>
+        <thead><tr><th>&nbsp;</th><th>מינימום</th><th>מומלץ</th></tr></thead>
+        <tbody>
+          <tr><td>מעבד</td><td class="num">4 ליבות</td><td class="num">8 ליבות</td></tr>
+          <tr><td>זיכרון</td><td class="num">8 ג׳יגה</td><td class="num">16 ג׳יגה</td></tr>
+          <tr><td>דיסק</td><td class="num">40 ג׳יגה פנויים</td><td class="num">100 ג׳יגה SSD</td></tr>
+          <tr><td>מערכת הפעלה</td><td>לינוקס, Docker Engine 24+, Compose v2.20+</td><td>Ubuntu 22.04 / 24.04 LTS</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>גישה יוצאת ב-HTTPS לשני שרתים בלבד, <strong>וללא שום גישה נכנסת מהאינטרנט</strong>:</p>
+    <ul>
+      <li><code>dekelmichpalil.azurecr.io</code> — משם מורידים את התוכנה.</li>
+      <li><code>api.anthropic.com</code> — ספק המודל, שאליו ניגש רק השער.</li>
+    </ul>
+    <p>אין צורך בפרטי גישה כדי להוריד את התוכנה — התמונות מוגשות באופן ציבורי ואינן מכילות קוד
+      מקור. צריך מפתח לספק המודל (או שנספק אחד), ורק אם רוצים את המחבר — את מכונת ה-Windows
+      שמריצה מיכפל, נגישה מהשרת הזה בפורט 3389.</p>
+  </section>
+
+  <section class="step">
+    <div class="step-n">01</div>
+    <div class="step-body">
+      <h2>בדיקת המכונה</h2>
+      <p>הפקודה לא כותבת דבר. היא מדווחת מה חסר ועוצרת.</p>
+      <div class="code"><button class="copy" type="button">העתק</button><pre><span class="c"># הורדת הערכה</span>
+git clone https://github.com/Dekel-finance/payroll-onprem.git
+cd payroll-onprem
+
+./install.sh check</pre></div>
+      <p>היא בודקת גרסאות של Docker ו-Compose, ליבות, זיכרון, מקום פנוי, את שני השרתים שלמעלה,
+        ואם שלושת הפורטים פנויים. כל מה שמסומן ב-<code>!</code> צריך תיקון קודם.</p>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-n">02</div>
+    <div class="step-body">
+      <h2>התקנה</h2>
+      <div class="code"><button class="copy" type="button">העתק</button><pre>./install.sh install</pre></div>
+      <p>ההתקנה מבקשת כתובת דוא״ל וסיסמה למנהל הראשון, ואז מדפיסה את שלוש הכתובות לפתיחה. אפשר
+        להריץ שוב בבטחה — היא מתקנת התקנה שלא הושלמה במקום להתחיל שנייה.</p>
+      <div class="note">
+        <p class="note-h">ההתקנה עולה ריקה</p>
+        <p>בלי לקוחות, בלי עובדים, בלי תלושים. הרשומות שלכם נכנסות דרך תהליך הקליטה והסנכרון
+          ממערכת השכר. התקנה שהייתה מגיעה מלאה מראש הייתה משאירה לכם שורות שצריך לזהות ולמחוק לפני
+          שאפשר לסמוך על משהו שרואים במסך.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-n">03</div>
+    <div class="step-body">
+      <h2>גיבוי קובץ המפתחות</h2>
+      <p>ההתקנה כותבת קובץ אחד, <code>.env</code>, שמחזיק את הסודות של ההתקנה הזו.</p>
+      <div class="warn">
+        <p class="warn-h">לעשות את זה לפני שממשיכים</p>
+        <p>שניים מהמפתחות בקובץ מצפינים נתונים במנוחה: אחד מצפין כל מסמך של עובד, והשני הוא מה
+          שמאפשר לקרוא מספר תעודת זהות. <strong>אם הקובץ אובד, אי אפשר לשחזר את הנתונים</strong> —
+          לא אנחנו ולא אף אחד. זה התכנון, וזה בלתי הפיך. העתיקו אותו למקום שאינו המכונה הזו.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-n">04</div>
+    <div class="step-body">
+      <h2>פתיחה, ואישור התעודה</h2>
+      <div class="tw">
+        <table>
+          <thead><tr><th>&nbsp;</th><th>כתובת</th><th>מי משתמש</th></tr></thead>
+          <tbody>
+            <tr><td>קונסולה</td><td><code>https://&lt;server&gt;:4201</code></td><td>לשכת השכר</td></tr>
+            <tr><td>ניהול</td><td><code>https://&lt;server&gt;:4301</code></td><td>הגדרות, משתמשים, מחברים</td></tr>
+            <tr><td>פורטל</td><td><code>https://&lt;server&gt;:4401</code></td><td>עובדים</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>בכניסה הראשונה הדפדפן יזהיר שהתעודה אינה מהימנה. היא הונפקה על ידי רשות אישורים קטנה
+        שרצה בתוך ההתקנה שלכם, מפני שרשות ציבורית כמו Let's Encrypt לא יכולה להנפיק לשם ברשת
+        פרטית — היא חייבת להגיע לשרת מהאינטרנט, וזה בדיוק מה שההתקנה הזו נמנעת ממנו.</p>
+      <p>מתקנים פעם אחת, בכל מחשב. ייצוא אישור השורש:</p>
+      <div class="code"><button class="copy" type="button">העתק</button><pre>docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt .</pre></div>
+      <p>ואז התקנה שלו כרשות שורש מהימנה:</p>
+      <ul>
+        <li><strong>Windows</strong> — לחיצה כפולה על <code>root.crt</code> ← התקן אישור ← מחשב
+          מקומי ← מקם את כל האישורים בחנות הבאה ← <em>רשויות אישורים מהימנות</em>. אפשר להפיץ לכל
+          המחשבים בבת אחת דרך Group Policy.</li>
+        <li><strong>macOS</strong> — פתיחה ב-Keychain Access ← System ← לסמן <em>Always Trust</em>.</li>
+        <li><strong>לינוקס</strong> — להעתיק ל-<code>/usr/local/share/ca-certificates/</code>
+          ולהריץ <code>sudo update-ca-certificates</code>.</li>
+        <li><strong>iOS / Android</strong> — לשלוח את הקובץ במייל למכשיר ולהתקין כפרופיל.</li>
+      </ul>
+      <div class="note">
+        <p class="note-h">למה HTTP רגיל אינו אפשרות</p>
+        <p>האפליקציות מסמנות את עוגיית ההתחברות כ-<code>Secure</code>, ודפדפנים משליכים עוגייה כזו
+          שהגיעה דרך <code>http://</code>. מעל HTTP דף ההתחברות יקבל את הסיסמה, יעביר אתכם, ויחזיר
+          אתכם לדף ההתחברות — לנצח, בלי שגיאה בשום מקום.</p>
+      </div>
+      <p>אם לשרת יש שם מתחם ציבורי, הגדירו אותו ב-<code>SITE_ADDRESS</code> ובחרו
+        <code>CADDYFILE=Caddyfile.public</code> בקובץ <code>.env</code>; אז תונפק תעודה רגילה
+        אוטומטית, ופורט 80 חייב להיות נגיש לבדיקה.</p>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-n">05</div>
+    <div class="step-body">
+      <h2>חיבור מיכפל <span style="color:var(--ink-faint);font-weight:400">— לא חובה</span></h2>
+      <p>המחבר מפעיל את מיכפל דרך RDP על מכונת Windows ברשת שלכם. בקובץ <code>.env</code>, הגדירו
+        את <code>RDP_HOST</code> לכתובת של אותה מכונה ואת <code>RDP_USER</code> /
+        <code>RDP_PASS</code> לחשבון שיכול להתחבר אליה, ואז:</p>
+      <div class="code"><button class="copy" type="button">העתק</button><pre>docker compose --profile michpal up -d</pre></div>
+      <p>הרצה אחת בכל רגע, במכוון: מכונת Windows נותנת סשן אינטראקטיבי אחד למשתמש, ושתי אוטומציות
+        שחולקות שולחן עבודה אחד מפריעות זו לזו באופן שיקר לתקן.</p>
+      <div class="warn">
+        <p class="warn-h">לתאם מראש פגישת כיול</p>
+        <p>האוטומציה מזהה מסכים לפי הפיקסלים שלהם, והיא מכוילת מול התקנת מיכפל שלנו. גרסה אחרת,
+          רזולוציה אחרת או ספר חברות אחר עשויים לדרוש כיול מחדש. עדיף לתאם איתנו מראש ולא לגלות
+          את זה באמצע הרצת שכר.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="plain">
+    <h2>עדכונים</h2>
+    <p>ההתקנה בודקת אם יצאה גרסה חדשה <strong>כל עשר דקות</strong> ומחילה אותה בעצמה. אין מה
+      להריץ.</p>
+    <p>היא עוקבת אחרי ערוץ <code>stable</code> — הגרסה שאישרנו, ולא מה שנבנה לאחרונה — כך שעדכון
+      קורה רק כשהחלטנו שכן. מה שמופעל מחדש מוגדר בכוונה בצמצום:</p>
+    <div class="tw">
+      <table>
+        <thead><tr><th>&nbsp;</th><th>מתעדכן לבד</th></tr></thead>
+        <tbody>
+          <tr><td>האפליקציות</td><td><strong>כן</strong> — כמה שניות לכל אחת, אחת בכל פעם</td></tr>
+          <tr><td>מסד הנתונים</td><td><strong>אף פעם.</strong> שדרוג מסד נתונים הוא מיגרציית נתונים, ולא משהו שעושים ללא השגחה בשלוש לפנות בוקר.</td></tr>
+          <tr><td>המחבר למיכפל</td><td><strong>לא</strong>, כברירת מחדל — הוא מריץ סשן אחד בכל רגע ושומר את מצב ההרצה בזיכרון, כך שהפעלה מחדש באמצע הרצה הייתה מסיימת את הרצת השכר בלי לדווח.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>כדי לאשר כל עדכון בעצמכם, הגדירו אחד מאלה בקובץ <code>.env</code> והפעילו מחדש. בשני
+      המקרים <code>./install.sh update</code> מחיל את הגרסה הנוכחית מיד.</p>
+    <div class="code"><button class="copy" type="button">העתק</button><pre>AUTO_UPDATE_MONITOR_ONLY=true   <span class="c"># מדווח מה היה עושה, לא משנה כלום</span>
+BUNDLE_VERSION=1.1.0            <span class="c"># נעילה לגרסה; עדכונים לא ירוצו</span></pre></div>
+    <div class="warn">
+      <p class="warn-h">מה מנגנון העדכון מורשה לעשות</p>
+      <p>הוא צריך גישה לשירות ה-Docker במכונה, מה שהופך אותו בפועל למורשה כמו חשבון המנהל. זה
+        המחיר של עדכוני אבטחה ללא השגחה על שרת שאף אחד לא מתחבר אליו. אם מדיניות האבטחה שלכם לא
+        מאפשרת זאת, השתמשו ב-<code>AUTO_UPDATE_MONITOR_ONLY=true</code> ועדכנו ידנית.</p>
+    </div>
+  </section>
+
+  <section class="plain">
+    <h2>תפעול שוטף</h2>
+    <div class="code"><button class="copy" type="button">העתק</button><pre>./install.sh status     <span class="c"># מה רץ, ומה הכתובות</span>
+./install.sh logs       <span class="c"># מעקב אחרי הכל; אפשר להוסיף שם שירות</span>
+./install.sh backup     <span class="c"># מסד נתונים + מסמכים, אל ./backups/&lt;timestamp&gt;/</span>
+./install.sh update     <span class="c"># משיכת גרסה חדשה והפעלה מחדש</span>
+./install.sh stop       <span class="c"># עצירה; הנתונים לא נוגעים</span></pre></div>
+    <h3>גיבויים</h3>
+    <p><code>backup</code> כותב שני קבצים: דאמפ של מסד הנתונים וארכיון של המסמכים השמורים. צריך את
+      שניהם — שחזור של מסד הנתונים בלי המסמכים נותן התקנה שבה כל העובדים קיימים ואף קובץ שלהם לא
+      נפתח.</p>
+    <p>אף אחד מהם אינו קריא בלי <code>.env</code>. שמרו את העותק ההוא במקום אחר: ארכיון שיושב ליד
+      המפתח שמצפין אותו הוא גניבה אחת, לא שתיים.</p>
+  </section>
+
+  <section class="plain">
+    <h2>מה יוצא מהרשת שלכם</h2>
+    <p>שלושה דברים, ולא יותר.</p>
+    <ol>
+      <li><strong>בקשות למודל</strong>, דרך השער, כשערכים מזהים מוחלפים בסימנים ומוחזרים בתשובה.
+        מסמכים נקראים <em>על השרת הזה</em> — קובץ PDF הופך לטקסט כאן, ורק הטקסט המוסווה חוצה. מה
+        שסריקה לא מוסרת ל-OCR נדחה ולא מועבר.</li>
+      <li><strong>טלמטריה מצטברת</strong>, אם תפעילו אותה: מונים, משכי זמן, קודי שגיאה ומזהים
+        מגובבים. היא נבדקת מול רשימת היתר בדיוק לפני השליחה — כל דבר שאינו מספר, חותמת זמן, גיבוב
+        או קוד מוכר נדחה, כך שבמבנה אין דרך ששם או הודעת שגיאה שמצטטת מסך יעברו.
+        <code>GET /snapshot</code> בשירות המדדים מראה בדיוק מה היה נשלח. אם משאירים את
+        <code>BETTERSTACK_*</code> ריק, לא מדווח דבר.</li>
+      <li><strong>הורדות תמונות</strong>, בהתקנה או בעדכון.</li>
+    </ol>
+    <p>אין ערוץ גישה מרחוק. אנחנו לא יכולים להיכנס להתקנה הזו; אם תרצו שנסתכל על משהו, אתם שולחים
+      לנו את מה שאתם בוחרים לשלוח.</p>
+  </section>
+
+  <section class="plain">
+    <h2>כשמשהו לא עובד</h2>
+    <div class="tw">
+      <table>
+        <thead><tr><th>התסמין</th><th>איפה לבדוק</th></tr></thead>
+        <tbody>
+          <tr><td>דף ההתחברות חוזר לעצמו</td><td>אתם על <code>http://</code>. ראו שלב 04.</td></tr>
+          <tr><td>״להקצות מחבר״ בפעולת מיכפל</td><td><code>RDP_HOST</code> לא מוגדר, או ש-<code>./install.sh bootstrap</code> לא רץ.</td></tr>
+          <tr><td>הפורטל לא מציג כלום בשום כתובת</td><td><code>SITE_ADDRESS</code> לא תואם לשם שהקלדתם. הריצו <code>./install.sh bootstrap</code> שוב.</td></tr>
+          <tr><td>המודל דוחה מסמך</td><td><code>GATEWAY_ATTACHMENTS=block</code> וה-OCR לא קרא את הסריקה. סריקה ברורה יותר, או שינוי מודע ל-<code>allow</code>.</td></tr>
+          <tr><td>תזכורות לא נשלחות</td><td><code>./install.sh logs scheduler</code> — הוא מחזיר 503 כשמשימה הפסיקה להצליח.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <footer>
+      <p>תמיכה: <strong>support@dekel.finance</strong>. צרפו את הפלט של
+        <code>./install.sh status</code> ואת מזהה ההתקנה מתוך <code>.env</code>
+        (<code>METRICS_INSTALL_ID</code>).</p>
+    </footer>
+  </section>
+</div>
+
+</main>
+
+<script>
+  (function () {
+    var en = document.getElementById('lang-en');
+    var he = document.getElementById('lang-he');
+    var bEn = document.getElementById('btn-en');
+    var bHe = document.getElementById('btn-he');
+
+    function set(lang) {
+      var hebrew = lang === 'he';
+      // The whole document flips, not just the text: tables, list markers,
+      // callout rails and the numbered step column all read from `dir`.
+      document.documentElement.lang = hebrew ? 'he' : 'en';
+      document.documentElement.dir = hebrew ? 'rtl' : 'ltr';
+      en.hidden = hebrew;
+      he.hidden = !hebrew;
+      bEn.setAttribute('aria-pressed', String(!hebrew));
+      bHe.setAttribute('aria-pressed', String(hebrew));
+      try { localStorage.setItem('guide-lang', lang); } catch (e) {}
+    }
+
+    bEn.addEventListener('click', function () { set('en'); });
+    bHe.addEventListener('click', function () { set('he'); });
+
+    var saved = null;
+    try { saved = localStorage.getItem('guide-lang'); } catch (e) {}
+    set(saved || (navigator.language && navigator.language.indexOf('he') === 0 ? 'he' : 'en'));
+
+    // Copy buttons. The label says what happened, then goes back to the verb.
+    document.querySelectorAll('.copy').forEach(function (btn) {
+      var original = btn.textContent;
+      btn.addEventListener('click', function () {
+        var text = btn.parentElement.querySelector('pre').innerText;
+        navigator.clipboard.writeText(text).then(function () {
+          btn.textContent = document.documentElement.dir === 'rtl' ? 'הועתק' : 'Copied';
+          setTimeout(function () { btn.textContent = original; }, 1600);
+        });
+      });
+    });
+  })();
+</script>
+
+</body>
+</html>
