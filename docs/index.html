@@ -3,272 +3,152 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="Install and run the Dekel payroll platform on your own server: the database, console, back office, employee portal and Michpal connector, on hardware you own.">
-<meta name="robots" content="index,follow">
-<title>Dekel On-Prem Setup</title>
+<meta name="description" content="Deployment and security guide for running the Dekel payroll platform on your own infrastructure: network boundary, egress, key material, TLS, updates, backup and audit.">
+<title>On-Prem Deployment Guide</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700&family=Assistant:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
-
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700&family=Assistant:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
-  /* ── Tokens ───────────────────────────────────────────────────────────────
-     Light is the base and complete. Dark redefines tokens only, twice: once
-     for the un-stamped system default, once for the explicit toggle. No
-     component rule ever lives inside a theme block. */
   :root {
-    --paper:      #FBFAF6;
-    --surface:    #FFFFFF;
-    --sunk:       #F1EFE9;
-    --line:       #DFDCD3;
-    --line-soft:  #EAE7E0;
-    --ink:        #191E1C;   /* near-black, biased green — chosen, not inherited */
-    --ink-soft:   #4E5651;
-    --ink-faint:  #7E867F;
-    --accent:     #1F6F5C;   /* sealed green: the ledger, the cleared state */
-    --accent-ink: #14503F;
-    --accent-wash:#E7F1ED;
-    --warn:       #8A5A12;   /* the two warnings that are actually warnings */
-    --warn-wash:  #F7EFDF;
-    --crit:       #8E2A2A;
-    --code-bg:    #141A18;
-    --code-ink:   #E4EAE6;
-    --code-dim:   #8FA098;
-    --shadow:     0 1px 2px rgba(25,30,28,.05), 0 8px 24px -16px rgba(25,30,28,.28);
-
-    --measure: 68ch;
-    --step--1: clamp(.82rem, .8rem + .1vw, .875rem);
-    --step-0:  clamp(1rem, .97rem + .16vw, 1.075rem);
-    --step-1:  clamp(1.2rem, 1.13rem + .34vw, 1.4rem);
-    --step-2:  clamp(1.5rem, 1.36rem + .68vw, 1.95rem);
-    --step-3:  clamp(2rem, 1.7rem + 1.5vw, 3rem);
+    --paper:#FBFAF6; --surface:#FFFFFF; --sunk:#F1EFE9; --line:#DFDCD3; --line-soft:#EAE7E0;
+    --ink:#191E1C; --ink-soft:#4E5651; --ink-faint:#7E867F;
+    --accent:#1F6F5C; --accent-ink:#14503F; --accent-wash:#E7F1ED;
+    --warn:#8A5A12; --warn-wash:#F7EFDF; --crit:#8E2A2A; --crit-wash:#F6E7E6;
+    --code-bg:#141A18; --code-ink:#E4EAE6; --code-dim:#8FA098;
+    --shadow:0 1px 2px rgba(25,30,28,.05), 0 8px 24px -16px rgba(25,30,28,.28);
+    --measure:70ch;
+    --s--1:clamp(.82rem,.8rem + .1vw,.875rem); --s-0:clamp(1rem,.97rem + .16vw,1.06rem);
+    --s-1:clamp(1.18rem,1.11rem + .32vw,1.36rem); --s-2:clamp(1.42rem,1.3rem + .6vw,1.8rem);
+    --s-3:clamp(1.9rem,1.6rem + 1.4vw,2.7rem);
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --paper:      #101413;
-      --surface:    #161B1A;
-      --sunk:       #1B2220;
-      --line:       #2B3432;
-      --line-soft:  #232B29;
-      --ink:        #E3E9E5;
-      --ink-soft:   #A7B2AC;
-      --ink-faint:  #77827C;
-      --accent:     #5FBFA3;
-      --accent-ink: #8FD8C1;
-      --accent-wash:#152A24;
-      --warn:       #D9A855;
-      --warn-wash:  #2A2214;
-      --crit:       #E08585;
-      --code-bg:    #0B0F0E;
-      --code-ink:   #DCE5E0;
-      --code-dim:   #7C8D85;
-      --shadow:     0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+      --paper:#101413; --surface:#161B1A; --sunk:#1B2220; --line:#2B3432; --line-soft:#232B29;
+      --ink:#E3E9E5; --ink-soft:#A7B2AC; --ink-faint:#77827C;
+      --accent:#5FBFA3; --accent-ink:#8FD8C1; --accent-wash:#152A24;
+      --warn:#D9A855; --warn-wash:#2A2214; --crit:#E08585; --crit-wash:#2C1817;
+      --code-bg:#0B0F0E; --code-ink:#DCE5E0; --code-dim:#7C8D85;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
     }
   }
   :root[data-theme="dark"] {
-    --paper:      #101413;
-    --surface:    #161B1A;
-    --sunk:       #1B2220;
-    --line:       #2B3432;
-    --line-soft:  #232B29;
-    --ink:        #E3E9E5;
-    --ink-soft:   #A7B2AC;
-    --ink-faint:  #77827C;
-    --accent:     #5FBFA3;
-    --accent-ink: #8FD8C1;
-    --accent-wash:#152A24;
-    --warn:       #D9A855;
-    --warn-wash:  #2A2214;
-    --crit:       #E08585;
-    --code-bg:    #0B0F0E;
-    --code-ink:   #DCE5E0;
-    --code-dim:   #7C8D85;
-    --shadow:     0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+    --paper:#101413; --surface:#161B1A; --sunk:#1B2220; --line:#2B3432; --line-soft:#232B29;
+    --ink:#E3E9E5; --ink-soft:#A7B2AC; --ink-faint:#77827C;
+    --accent:#5FBFA3; --accent-ink:#8FD8C1; --accent-wash:#152A24;
+    --warn:#D9A855; --warn-wash:#2A2214; --crit:#E08585; --crit-wash:#2C1817;
+    --code-bg:#0B0F0E; --code-ink:#DCE5E0; --code-dim:#7C8D85;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
   }
-
-  *, *::before, *::after { box-sizing: border-box; }
-
-  body {
-    margin: 0;
-    background: var(--paper);
-    color: var(--ink);
-    font-family: "Assistant", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-    font-size: var(--step-0);
-    line-height: 1.65;
-    -webkit-font-smoothing: antialiased;
+  *,*::before,*::after{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:"Assistant",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    font-size:var(--s-0);line-height:1.65;-webkit-font-smoothing:antialiased}
+  .bar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:1rem;
+    padding:.65rem clamp(1rem,4vw,2.5rem);background:color-mix(in srgb,var(--paper) 90%,transparent);
+    backdrop-filter:blur(10px);border-bottom:1px solid var(--line-soft)}
+  .mark{font-family:"Frank Ruhl Libre",Georgia,serif;font-weight:700;font-size:1.02rem;letter-spacing:-.01em}
+  .mark span{color:var(--accent)}
+  .bar-spacer{flex:1}
+  .ver{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:var(--s--1);color:var(--ink-faint)}
+  .langs{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+  .langs button{font:inherit;font-size:var(--s--1);font-weight:600;padding:.3rem .85rem;border:0;
+    cursor:pointer;background:transparent;color:var(--ink-soft)}
+  .langs button[aria-pressed="true"]{background:var(--accent);color:var(--paper)}
+  .langs button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  main{padding:0 clamp(1rem,4vw,2.5rem) 6rem}
+  .wrap{max-width:var(--measure);margin-inline:auto}
+  .hero{padding:clamp(2.25rem,6vw,4rem) 0 1.5rem}
+  .eyebrow{font-size:var(--s--1);font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 .9rem}
+  [dir="rtl"] .eyebrow{letter-spacing:.04em}
+  h1{font-family:"Frank Ruhl Libre",Georgia,serif;font-weight:700;font-size:var(--s-3);
+    line-height:1.08;letter-spacing:-.02em;text-wrap:balance;margin:0 0 1rem}
+  .lede{font-size:var(--s-1);color:var(--ink-soft);margin:0;text-wrap:pretty}
+  h2{font-family:"Frank Ruhl Libre",Georgia,serif;font-weight:700;font-size:var(--s-2);
+    line-height:1.16;letter-spacing:-.015em;text-wrap:balance;margin:0 0 .5rem;scroll-margin-top:4rem}
+  h3{font-size:var(--s-1);font-weight:700;line-height:1.28;text-wrap:balance;margin:1.9rem 0 .45rem}
+  h4{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:var(--s--1);font-weight:600;
+    letter-spacing:.07em;text-transform:uppercase;color:var(--ink-faint);margin:1.7rem 0 .45rem}
+  [dir="rtl"] h4{letter-spacing:.02em}
+  p{margin:0 0 1rem;text-wrap:pretty}
+  a{color:var(--accent-ink);text-underline-offset:2px}
+  a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+  strong{font-weight:700}
+  ul,ol{margin:0 0 1rem;padding-inline-start:1.3rem}
+  li{margin-bottom:.42rem}
+  li::marker{color:var(--ink-faint)}
+  code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.88em;background:var(--sunk);
+    padding:.1em .34em;border-radius:4px;border:1px solid var(--line-soft);direction:ltr;unicode-bidi:embed}
+  section.sec{padding:2.25rem 0;border-top:1px solid var(--line-soft)}
+  .sec-n{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:var(--s--1);font-weight:500;
+    color:var(--accent);letter-spacing:.08em;display:block;margin-bottom:.35rem}
+  /* Contents */
+  nav.toc{background:var(--surface);border:1px solid var(--line);border-radius:6px;
+    padding:1.15rem 1.35rem;margin:1.75rem 0;box-shadow:var(--shadow)}
+  nav.toc h4{margin-top:0}
+  nav.toc ol{list-style:none;padding:0;margin:0;
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));gap:.15rem 1.5rem;counter-reset:t}
+  nav.toc li{counter-increment:t;margin:0}
+  nav.toc a{display:block;padding:.22rem 0;text-decoration:none;color:var(--ink);font-size:var(--s--1)}
+  nav.toc a:hover{color:var(--accent-ink);text-decoration:underline}
+  nav.toc a::before{content:counter(t,decimal-leading-zero);font-family:"IBM Plex Mono",monospace;
+    color:var(--ink-faint);margin-inline-end:.6rem;font-size:.78rem}
+  /* Callouts */
+  .note,.warn,.stop{border-inline-start:3px solid var(--accent);background:var(--accent-wash);
+    padding:.95rem 1.15rem;border-radius:0 6px 6px 0;margin:1.25rem 0}
+  [dir="rtl"] .note,[dir="rtl"] .warn,[dir="rtl"] .stop{border-radius:6px 0 0 6px}
+  .warn{border-inline-start-color:var(--warn);background:var(--warn-wash)}
+  .stop{border-inline-start-color:var(--crit);background:var(--crit-wash)}
+  .note>:last-child,.warn>:last-child,.stop>:last-child{margin-bottom:0}
+  .co-h{font-size:var(--s--1);font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--accent-ink);margin:0 0 .35rem}
+  [dir="rtl"] .co-h{letter-spacing:.02em}
+  .warn .co-h{color:var(--warn)}
+  .stop .co-h{color:var(--crit)}
+  /* Tables */
+  .tw{overflow-x:auto;margin:1.2rem 0;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+  table{border-collapse:collapse;width:100%;font-size:var(--s--1)}
+  th,td{text-align:start;padding:.58rem .8rem;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  tbody tr:last-child td{border-bottom:0}
+  th{font-weight:700;font-size:.76rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);
+    border-bottom:1px solid var(--line);background:var(--sunk)}
+  [dir="rtl"] th{letter-spacing:.02em}
+  td.num,td.mono{font-variant-numeric:tabular-nums;white-space:nowrap}
+  td.mono{font-family:"IBM Plex Mono",monospace;direction:ltr}
+  /* Code */
+  .code{position:relative;margin:1.05rem 0;background:var(--code-bg);border-radius:8px;box-shadow:var(--shadow)}
+  .code pre{margin:0;padding:.95rem 1.05rem;overflow-x:auto;font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:var(--s--1);line-height:1.72;color:var(--code-ink);direction:ltr;text-align:left}
+  .code .c{color:var(--code-dim)}
+  .copy{position:absolute;inset-block-start:.45rem;inset-inline-end:.45rem;font:inherit;font-size:.7rem;
+    font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding:.25rem .55rem;border-radius:5px;
+    cursor:pointer;background:rgba(255,255,255,.08);color:var(--code-dim);border:1px solid rgba(255,255,255,.12)}
+  .copy:hover{color:var(--code-ink);background:rgba(255,255,255,.14)}
+  /* Diagram */
+  .fig{margin:1.5rem 0}
+  .fig svg{width:100%;height:auto;display:block}
+  .cap{font-size:var(--s--1);color:var(--ink-faint);margin-top:.5rem}
+  .b-box{fill:var(--surface);stroke:var(--line)}
+  .b-seal{fill:none;stroke:var(--accent);stroke-dasharray:5 4}
+  .b-gate{fill:var(--accent-wash);stroke:var(--accent)}
+  .b-out{fill:var(--sunk);stroke:var(--line)}
+  .b-t{fill:var(--ink);font-family:"Assistant",sans-serif;font-size:12px;font-weight:600}
+  .b-s{fill:var(--ink-faint);font-family:"Assistant",sans-serif;font-size:10.5px}
+  .b-l{stroke:var(--ink-faint);fill:none}
+  .b-x{stroke:var(--crit)}
+  footer{border-top:1px solid var(--line);margin-top:2rem;padding:1.6rem 0 0;color:var(--ink-faint);font-size:var(--s--1)}
+  [hidden]{display:none !important}
+  @media (prefers-reduced-motion: reduce){*{transition:none !important;animation:none !important}}
+  @media print{
+    .bar,.copy{display:none}
+    body{background:#fff;color:#000;font-size:10.5pt}
+    section.sec{break-inside:avoid-page}
+    .code{box-shadow:none}
+    a{color:#000;text-decoration:underline}
   }
-
-  /* ── Masthead ───────────────────────────────────────────────────────────── */
-  .bar {
-    position: sticky; top: 0; z-index: 20;
-    display: flex; align-items: center; gap: 1rem;
-    padding: .7rem clamp(1rem, 4vw, 2.5rem);
-    background: color-mix(in srgb, var(--paper) 88%, transparent);
-    backdrop-filter: blur(10px);
-    border-bottom: 1px solid var(--line-soft);
-  }
-  .mark {
-    font-family: "Frank Ruhl Libre", Georgia, serif;
-    font-weight: 700; font-size: 1.02rem; letter-spacing: -.01em;
-  }
-  .mark span { color: var(--accent); }
-  .bar-spacer { flex: 1; }
-  .ver {
-    font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: var(--step--1); color: var(--ink-faint);
-  }
-  .langs { display: flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
-  .langs button {
-    font: inherit; font-size: var(--step--1); font-weight: 600;
-    padding: .3rem .85rem; border: 0; cursor: pointer;
-    background: transparent; color: var(--ink-soft);
-  }
-  .langs button[aria-pressed="true"] { background: var(--accent); color: #fff; }
-  :root[data-theme="dark"] .langs button[aria-pressed="true"],
-  .langs button[aria-pressed="true"] { color: var(--paper); }
-  .langs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-
-  main { padding: 0 clamp(1rem, 4vw, 2.5rem) 6rem; }
-  .wrap { max-width: var(--measure); margin-inline: auto; }
-
-  /* ── Opening ────────────────────────────────────────────────────────────── */
-  .hero { padding: clamp(2.5rem, 7vw, 5rem) 0 2rem; }
-  .eyebrow {
-    font-size: var(--step--1); font-weight: 700; letter-spacing: .09em;
-    text-transform: uppercase; color: var(--accent);
-    margin: 0 0 .9rem;
-  }
-  [dir="rtl"] .eyebrow { letter-spacing: .04em; }
-  h1 {
-    font-family: "Frank Ruhl Libre", Georgia, serif;
-    font-weight: 700; font-size: var(--step-3); line-height: 1.08;
-    letter-spacing: -.02em; text-wrap: balance;
-    margin: 0 0 1rem;
-  }
-  .lede { font-size: var(--step-1); color: var(--ink-soft); margin: 0; text-wrap: pretty; }
-
-  h2 {
-    font-family: "Frank Ruhl Libre", Georgia, serif;
-    font-weight: 700; font-size: var(--step-2); line-height: 1.15;
-    letter-spacing: -.015em; text-wrap: balance;
-    margin: 0 0 .6rem;
-  }
-  h3 {
-    font-size: var(--step-1); font-weight: 700; line-height: 1.25;
-    text-wrap: balance; margin: 2rem 0 .5rem;
-  }
-  p { margin: 0 0 1rem; text-wrap: pretty; }
-  a { color: var(--accent-ink); text-underline-offset: 2px; }
-  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
-  strong { font-weight: 700; }
-
-  /* ── Steps: numbered because the install genuinely is a sequence ─────────── */
-  .step {
-    display: grid; grid-template-columns: 2.6rem 1fr; gap: 0 1.25rem;
-    padding: 2.5rem 0; border-top: 1px solid var(--line-soft);
-  }
-  .step-n {
-    font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: var(--step--1); font-weight: 500;
-    color: var(--accent); padding-top: .55rem;
-    font-variant-numeric: tabular-nums;
-  }
-  .step-body { min-width: 0; }
-  .plain { padding: 2.5rem 0; border-top: 1px solid var(--line-soft); }
-
-  /* ── Code ───────────────────────────────────────────────────────────────── */
-  .code {
-    position: relative; margin: 1.1rem 0 1.25rem;
-    background: var(--code-bg); border-radius: 8px;
-    box-shadow: var(--shadow);
-  }
-  .code pre {
-    margin: 0; padding: 1rem 1.1rem; overflow-x: auto;
-    font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: var(--step--1); line-height: 1.75;
-    color: var(--code-ink);
-    direction: ltr; text-align: left;
-  }
-  .code .c { color: var(--code-dim); }
-  .copy {
-    position: absolute; inset-block-start: .5rem; inset-inline-end: .5rem;
-    font: inherit; font-size: .72rem; font-weight: 600;
-    letter-spacing: .05em; text-transform: uppercase;
-    padding: .28rem .6rem; border-radius: 5px; cursor: pointer;
-    background: rgba(255,255,255,.08); color: var(--code-dim);
-    border: 1px solid rgba(255,255,255,.12);
-  }
-  .copy:hover { color: var(--code-ink); background: rgba(255,255,255,.14); }
-  .copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  code {
-    font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: .89em; background: var(--sunk);
-    padding: .1em .35em; border-radius: 4px;
-    border: 1px solid var(--line-soft);
-    direction: ltr; unicode-bidi: embed;
-  }
-
-  /* ── Callouts. Two kinds, and the difference is real: one explains, one
-        is a thing you can lose data by ignoring. ───────────────────────────── */
-  .note, .warn {
-    border-inline-start: 3px solid var(--accent);
-    background: var(--accent-wash);
-    padding: 1rem 1.15rem; border-radius: 0 6px 6px 0;
-    margin: 1.25rem 0;
-  }
-  [dir="rtl"] .note, [dir="rtl"] .warn { border-radius: 6px 0 0 6px; }
-  .warn { border-inline-start-color: var(--warn); background: var(--warn-wash); }
-  .note p:last-child, .warn p:last-child { margin-bottom: 0; }
-  .note-h, .warn-h {
-    font-size: var(--step--1); font-weight: 700; letter-spacing: .06em;
-    text-transform: uppercase; color: var(--accent-ink);
-    margin: 0 0 .4rem;
-  }
-  [dir="rtl"] .note-h, [dir="rtl"] .warn-h { letter-spacing: .02em; }
-  .warn-h { color: var(--warn); }
-
-  /* ── Tables ─────────────────────────────────────────────────────────────── */
-  .tw { overflow-x: auto; margin: 1.25rem 0; }
-  table { border-collapse: collapse; width: 100%; font-size: var(--step--1); }
-  th, td { text-align: start; padding: .6rem .8rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
-  th {
-    font-weight: 700; font-size: .78rem; letter-spacing: .07em;
-    text-transform: uppercase; color: var(--ink-faint);
-    border-bottom-color: var(--line);
-  }
-  [dir="rtl"] th { letter-spacing: .02em; }
-  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
-
-  ul, ol { margin: 0 0 1rem; padding-inline-start: 1.3rem; }
-  li { margin-bottom: .45rem; }
-  li::marker { color: var(--ink-faint); }
-
-  /* ── The boundary diagram ───────────────────────────────────────────────── */
-  .fig { margin: 1.75rem 0; }
-  .fig svg { width: 100%; height: auto; display: block; }
-  .cap {
-    font-size: var(--step--1); color: var(--ink-faint);
-    margin-top: .6rem; text-align: center;
-  }
-  .b-box { fill: var(--surface); stroke: var(--line); }
-  .b-seal { fill: none; stroke: var(--accent); stroke-dasharray: 5 4; }
-  .b-gate { fill: var(--accent-wash); stroke: var(--accent); }
-  .b-out { fill: var(--sunk); stroke: var(--line); }
-  .b-t { fill: var(--ink); font-family: "Assistant", sans-serif; font-size: 12px; font-weight: 600; }
-  .b-s { fill: var(--ink-faint); font-family: "Assistant", sans-serif; font-size: 10.5px; }
-  .b-l { stroke: var(--ink-faint); }
-  .b-x { stroke: var(--crit); }
-
-  footer {
-    border-top: 1px solid var(--line-soft); margin-top: 2rem;
-    padding: 2rem 0 0; color: var(--ink-faint); font-size: var(--step--1);
-  }
-
-  [hidden] { display: none !important; }
-  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
 <body>
-
 <div class="bar">
   <div class="mark">Dekel<span>.</span></div>
   <div class="bar-spacer"></div>
@@ -278,586 +158,764 @@
     <button type="button" id="btn-he" aria-pressed="false">עברית</button>
   </div>
 </div>
-
 <main>
-
-<!-- ══════════════════════════ ENGLISH ══════════════════════════ -->
-<div id="lang-en" class="wrap">
-
-  <header class="hero">
-    <p class="eyebrow">Installation guide</p>
-    <h1>Run the payroll platform on your own server</h1>
-    <p class="lede">The database, the console, the back office, the employee portal and the
-      מיכפל connector — all on hardware you own. About twenty minutes, most of it downloading.</p>
-  </header>
-
-  <section class="plain">
-    <h2>What you are installing</h2>
-    <p>Ten containers on one machine. The six that hold your data — the console, the back
-      office, the portal, the agent, the scheduler and the database — sit on a Docker network with
-      <strong>no route to the internet at all</strong>: not as a policy, but as a fact of how the
-      network is built. A call that tried to skip the gateway would fail to resolve rather than
-      leak. Only four containers can reach out at all — the gateway, the telemetry reporter, the
-      certificate proxy and the updater.</p>
-
-    <div class="fig">
-      <svg viewBox="0 0 660 250" role="img" aria-label="The applications sit inside a sealed network. Only the gateway can reach a model vendor, and it replaces identifying values first.">
-        <rect class="b-seal" x="8" y="8" width="420" height="234" rx="10"/>
-        <text class="b-s" x="24" y="30">your building — no route to the internet</text>
-
-        <rect class="b-box" x="30" y="48" width="112" height="38" rx="6"/>
-        <text class="b-t" x="48" y="72">Console</text>
-        <rect class="b-box" x="30" y="96" width="112" height="38" rx="6"/>
-        <text class="b-t" x="55" y="120">Admin</text>
-        <rect class="b-box" x="30" y="144" width="112" height="38" rx="6"/>
-        <text class="b-t" x="55" y="168">Portal</text>
-        <rect class="b-box" x="30" y="192" width="112" height="38" rx="6"/>
-        <text class="b-t" x="47" y="216">Database</text>
-
-        <path class="b-l" d="M142 115 H228" stroke-width="1.5" fill="none" marker-end="url(#a)"/>
-        <rect class="b-gate" x="232" y="86" width="120" height="58" rx="8"/>
-        <text class="b-t" x="262" y="110">Gateway</text>
-        <text class="b-s" x="245" y="128">reads &amp; replaces</text>
-
-        <path class="b-x" d="M170 205 H250" stroke-width="1.5" fill="none"/>
-        <path class="b-x" d="M204 195 l16 20 M220 195 l-16 20" stroke-width="1.5"/>
-        <text class="b-s" x="258" y="209">a call that skipped it cannot connect</text>
-
-        <path class="b-l" d="M352 115 H520" stroke-width="1.5" fill="none" marker-end="url(#a)"/>
-        <rect class="b-out" x="524" y="86" width="120" height="58" rx="8"/>
-        <text class="b-t" x="548" y="110">Model</text>
-        <text class="b-t" x="548" y="128">vendor</text>
-        <text class="b-s" x="368" y="106">[PII:ID:1]</text>
-        <text class="b-s" x="368" y="136">never a name</text>
-
-        <defs>
-          <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-            <path d="M0 0 L10 5 L0 10 z" fill="currentColor" style="color: var(--ink-faint)"/>
-          </marker>
-        </defs>
-      </svg>
-      <p class="cap">Identifying values are replaced before anything leaves, and restored in the answer.</p>
-    </div>
-  </section>
-
-  <section class="plain">
-    <h2>Before you start</h2>
-    <div class="tw">
-      <table>
-        <thead><tr><th>&nbsp;</th><th>Minimum</th><th>Comfortable</th></tr></thead>
-        <tbody>
-          <tr><td>CPU</td><td class="num">4 cores</td><td class="num">8 cores</td></tr>
-          <tr><td>RAM</td><td class="num">8 GB</td><td class="num">16 GB</td></tr>
-          <tr><td>Disk</td><td class="num">40 GB free</td><td class="num">100 GB SSD</td></tr>
-          <tr><td>OS</td><td>Linux, Docker Engine 24+, Compose v2.20+</td><td>Ubuntu 22.04 / 24.04 LTS</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p>Outbound HTTPS to exactly two hosts, and <strong>no inbound access from the internet at all</strong>:</p>
-    <ul>
-      <li><code>dekelmichpalil.azurecr.io</code> — where the software is downloaded from.</li>
-      <li><code>api.anthropic.com</code> — the model vendor, reached only by the gateway.</li>
-    </ul>
-    <p>No credentials are needed to download the software — the images are served publicly and
-      carry no source code. You will need a model vendor key (or ask us to supply one), and —
-      only if you want the connector — the Windows machine running מיכפל, reachable from this
-      server on port 3389.</p>
-  </section>
-
-  <section class="step">
-    <div class="step-n">01</div>
-    <div class="step-body">
-      <h2>Check the machine</h2>
-      <p>This writes nothing. It reports what is missing and stops.</p>
-      <div class="code"><button class="copy" type="button">Copy</button><pre><span class="c"># download the kit</span>
-git clone https://github.com/Dekel-finance/payroll-onprem.git
+<div id="lang-en" class="wrap"><header class="hero"><p class="eyebrow">Deployment guide</p><h1>Running the payroll platform on your own infrastructure</h1><p class="lede">The database, the console, the back office, the employee portal and the payroll-system
+   connector, on hardware you control. This document is written for the person who has to
+   approve, install and then be accountable for it — not for a demonstration.</p></header><nav class="toc" aria-label="Contents"><h4>Contents</h4><ol><li><a href="#review-en">Summary for a security review</a></li><li><a href="#arch-en">The network boundary</a></li><li><a href="#req-en">Requirements</a></li><li><a href="#install-en">Installation</a></li><li><a href="#keys-en">Key material, and what cannot be recovered</a></li><li><a href="#tls-en">TLS and certificate trust</a></li><li><a href="#access-en">Identity, access, and what we cannot do</a></li><li><a href="#egress-en">Exactly what leaves your network</a></li><li><a href="#updates-en">Updates</a></li><li><a href="#backup-en">Backup and restore</a></li><li><a href="#audit-en">Logging and audit</a></li><li><a href="#connector-en">The payroll-system connector</a></li><li><a href="#ops-en">Operations reference</a></li><li><a href="#trouble-en">Troubleshooting</a></li><li><a href="#limits-en">Limitations, stated plainly</a></li><li><a href="#support-en">Support and escalation</a></li></ol></nav><section class="sec" id="review-en"><span class="sec-n">01</span><h2>Summary for a security review</h2>
+<p>This section answers, in one place, the questions a security review asks first.
+Every claim in it is expanded later in the document, and every one of them is
+checkable on your own machine rather than taken on trust.</p>
+<div class="tw"><table>
+<thead><tr><th>Question</th><th>Answer</th></tr></thead><tbody>
+<tr><td>Where does payroll data live</td><td><strong>On this server only.</strong> No employee, payslip or client record is stored on our infrastructure.</td></tr>
+<tr><td>Inbound connections</td><td><strong>None.</strong> No firewall rule, no published port, no public DNS record, no VPN.</td></tr>
+<tr><td>Outbound connections</td><td>Up to <strong>four</strong> destinations over HTTPS, listed in §8. One is required; the rest are features you can decline.</td></tr>
+<tr><td>Can the vendor reach this machine</td><td><strong>No.</strong> There is no tunnel, no remote-support channel and no credential of ours on the server. If you want us to see something, you send it.</td></tr>
+<tr><td>Data at rest</td><td>Employee documents and national identity numbers are encrypted with keys generated on this machine at install time and held only by you.</td></tr>
+<tr><td>Data sent to an AI vendor</td><td>Pseudonymized text only, through a single process that cannot be bypassed. Documents are converted to text <em>on this server</em>. Attachments are refused by default.</td></tr>
+<tr><td>Telemetry</td><td>Counts, durations and hashes, checked against an allow-list immediately before sending. Leave the values blank and nothing is sent at all.</td></tr>
+<tr><td>Privileges</td><td>Application containers run as an unprivileged user. <strong>The automatic updater requires access to the Docker socket</strong> — see §9 before deciding.</td></tr>
+<tr><td>Deletion</td><td>Stop the stack and delete its volumes. Nothing of yours remains anywhere else.</td></tr>
+<tr><td>Subprocessors</td><td>Named in §8. There are more than one, and a review that only asks about the obvious one is not finished.</td></tr>
+</tbody></table></div>
+</section><section class="sec" id="arch-en"><span class="sec-n">02</span><h2>The network boundary</h2>
+<p>Ten containers on one machine. The six that hold your data sit on a Docker
+network declared <em>internal</em>, which means the Docker daemon installs no
+route from it to anywhere. This is not a firewall rule that can be edited and it
+is not a policy that code has to remember: a process on that network that tried
+to reach the internet would fail to resolve the name.</p>
+<div class="fig">
+  <svg viewBox="0 0 660 250" role="img" aria-label="The applications sit inside a sealed network. Only the gateway can reach a model vendor, and it replaces identifying values first.">
+    <rect class="b-seal" x="8" y="8" width="420" height="234" rx="10"/>
+    <text class="b-s" x="24" y="30">your building — no route to the internet</text>
+    <rect class="b-box" x="30" y="48" width="112" height="38" rx="6"/><text class="b-t" x="48" y="72">Console</text>
+    <rect class="b-box" x="30" y="96" width="112" height="38" rx="6"/><text class="b-t" x="55" y="120">Admin</text>
+    <rect class="b-box" x="30" y="144" width="112" height="38" rx="6"/><text class="b-t" x="55" y="168">Portal</text>
+    <rect class="b-box" x="30" y="192" width="112" height="38" rx="6"/><text class="b-t" x="47" y="216">Database</text>
+    <path class="b-l" d="M142 115 H228" stroke-width="1.5" marker-end="url(#a)"/>
+    <rect class="b-gate" x="232" y="86" width="120" height="58" rx="8"/>
+    <text class="b-t" x="262" y="110">Gateway</text><text class="b-s" x="245" y="128">reads &amp; replaces</text>
+    <path class="b-x" d="M170 205 H250" stroke-width="1.5"/>
+    <path class="b-x" d="M204 195 l16 20 M220 195 l-16 20" stroke-width="1.5"/>
+    <text class="b-s" x="258" y="209">a call that skipped it cannot connect</text>
+    <path class="b-l" d="M352 115 H520" stroke-width="1.5" marker-end="url(#a)"/>
+    <rect class="b-out" x="524" y="86" width="120" height="58" rx="8"/>
+    <text class="b-t" x="548" y="110">AI</text><text class="b-t" x="548" y="128">vendor</text>
+    <text class="b-s" x="368" y="106">[PII:ID:1]</text><text class="b-s" x="368" y="136">never a name</text>
+    <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="currentColor" style="color: var(--ink-faint)"/></marker></defs>
+  </svg>
+  <p class="cap">Identifying values are replaced before anything leaves, and restored in the answer.</p>
+</div>
+<div class="tw"><table>
+<thead><tr><th>Container</th><th>Holds payroll data</th><th>Can reach the internet</th></tr></thead><tbody>
+<tr><td>Database</td><td>yes</td><td>no</td></tr>
+<tr><td>Console, Admin, Portal</td><td>yes</td><td>no</td></tr>
+<tr><td>Agent, Scheduler</td><td>yes</td><td>no</td></tr>
+<tr><td>Gateway</td><td>in transit only</td><td><strong>yes</strong> — the AI vendors, and nothing else</td></tr>
+<tr><td>Telemetry</td><td>no</td><td><strong>yes</strong> — the reporting endpoint you configure</td></tr>
+<tr><td>Web front end</td><td>no</td><td><strong>yes</strong> — only to obtain a public certificate, if you use one</td></tr>
+<tr><td>Updater</td><td>no</td><td><strong>yes</strong> — the image registry</td></tr>
+</tbody></table></div>
+<p>You can confirm the separation yourself at any time, without our help:</p>
+<div class="code"><button class="copy" type="button">Copy</button><pre><span class="c"># should fail: the applications have no route out</span>
+docker compose exec console node -e "fetch('https://example.com').catch(e=>{console.log('no route:',e.message);process.exit(0)}).then(()=>process.exit(1))"</pre></div>
+</section><section class="sec" id="req-en"><span class="sec-n">03</span><h2>Requirements</h2>
+<div class="tw"><table>
+<thead><tr><th>&nbsp;</th><th>Minimum</th><th>Recommended</th></tr></thead><tbody>
+<tr><td>CPU</td><td class="num">4 cores</td><td class="num">8 cores</td></tr>
+<tr><td>Memory</td><td class="num">8 GB</td><td class="num">16 GB</td></tr>
+<tr><td>Disk</td><td class="num">40 GB free</td><td class="num">100 GB SSD</td></tr>
+<tr><td>OS</td><td>Linux, Docker Engine 24+, Compose v2.20+</td><td>Ubuntu 22.04 / 24.04 LTS</td></tr>
+</tbody></table></div>
+<h4>Ports</h4>
+<div class="tw"><table>
+<thead><tr><th>Direction</th><th>Port</th><th>Between</th></tr></thead><tbody>
+<tr><td>LAN, inbound to this server</td><td class="mono">443</td><td>staff browsers → the three applications</td></tr>
+<tr><td>LAN, outbound from this server</td><td class="mono">3389</td><td>connector → the Windows payroll machine. <strong>Never leaves your LAN</strong></td></tr>
+<tr><td>Internet, outbound</td><td class="mono">443</td><td>this server → the destinations in §8</td></tr>
+<tr><td>Internet, inbound</td><td colspan="2"><strong>none, at any perimeter</strong></td></tr>
+</tbody></table></div>
+<p>Port <code>80</code> is needed only if you choose a publicly resolvable hostname
+and want an automatically issued certificate; see §6. On a private network it
+stays closed.</p>
+<h4>What you need to have decided</h4>
+<ul>
+<li>A hostname staff will type. A private name such as <code>payroll.office.local</code> is fine and is the normal case.</li>
+<li>Whether AI-assisted features are in scope for you at all (§8). They can be switched off entirely, and the payroll automation still runs.</li>
+<li>Who the first administrator is — an email address and a password, set during installation.</li>
+<li>Where the key file will be backed up to (§5). Decide this <em>before</em> installing.</li>
+</ul>
+</section><section class="sec" id="install-en"><span class="sec-n">04</span><h2>Installation</h2>
+<h4>Step 1 — inspect the machine</h4>
+<p>This writes nothing. It reports what is missing and stops.</p>
+<div class="code"><button class="copy" type="button">Copy</button><pre>git clone https://github.com/Dekel-finance/payroll-onprem.git
 cd payroll-onprem
-
 ./install.sh check</pre></div>
-      <p>It checks Docker and Compose versions, cores, memory, free disk, the two hostnames above,
-        and whether the three ports are free. Anything marked <code>!</code> has to be fixed first.</p>
-    </div>
-  </section>
+<p>It verifies Docker and Compose versions, cores, memory, free disk, that the
+outbound destinations resolve, and that the ports are free. Anything marked
+<code>!</code> must be fixed first.</p>
+<h4>Step 2 — install</h4>
+<div class="code"><button class="copy" type="button">Copy</button><pre>./install.sh install</pre></div>
+<p>It asks for the first administrator's email and password, then prints the
+addresses to open. Running it again is safe: it repairs an incomplete install
+rather than starting a second one.</p>
+<div class="note"><p class="co-h">The system starts empty, deliberately</p>
+<p>No clients, no employees, no payslips. Your records arrive through onboarding
+and the sync from your payroll system. An installation delivered pre-filled
+would be rows your staff must identify and delete before they could trust
+anything on screen, and we are not willing to put you in that position.</p></div>
+<h4>Step 3 — record what you now hold</h4>
+<p>Before going further, complete §5. It is the only step in this document that
+cannot be undone later.</p>
+</section><section class="sec" id="keys-en"><span class="sec-n">05</span><h2>Key material, and what cannot be recovered</h2>
+<p>The installer generates one file, <code>.env</code>, holding this
+installation's secrets. Two of the keys in it encrypt data at rest: one seals
+every employee document, the other is what makes a national identity number
+readable.</p>
+<div class="stop"><p class="co-h">This is irreversible, and it is the design</p>
+<p><strong>If <code>.env</code> is lost, the data in the volumes cannot be
+recovered — not by you, not by us, not by anyone.</strong> We hold no copy and
+no escrow. That is precisely what makes the encryption meaningful: there is no
+key of ours that could be compelled, stolen or mistakenly used. It also means
+the backup of this file is your responsibility and nobody else's.</p></div>
+<div class="code"><button class="copy" type="button">Copy</button><pre><span class="c"># copy it somewhere that is not this machine, before going further</span>
+cp .env /secure/offline/location/payroll-env-$(date +%F)</pre></div>
+<div class="warn"><p class="co-h">Never regenerate these two keys</p>
+<p>Regenerating <code>NATIONAL_ID_KEYS</code> or <code>PORTAL_FILE_KEK</code> on
+an installation that already holds records orphans every identity number and
+every sealed document already written. The rows survive; their contents become
+permanently unreadable.</p></div>
+<h4>Recommended handling</h4>
+<ul>
+<li>Store it where your organisation stores other root credentials — a password manager with an audit trail, or a sealed offline copy.</li>
+<li><strong>Do not keep the only copy beside the backups.</strong> An archive sitting next to the key that decrypts it is one theft, not two.</li>
+<li>Record who holds it. An install whose key is known only to someone who has left the firm is an outage waiting for its trigger.</li>
+</ul>
+</section><section class="sec" id="tls-en"><span class="sec-n">06</span><h2>TLS and certificate trust</h2>
+<p>The applications are reached over HTTPS at:</p>
+<div class="tw"><table>
+<thead><tr><th>&nbsp;</th><th>Address</th><th>Used by</th></tr></thead><tbody>
+<tr><td>Console</td><td class="mono">https://&lt;server&gt;:4201</td><td>the payroll office</td></tr>
+<tr><td>Admin</td><td class="mono">https://&lt;server&gt;:4301</td><td>settings, users, connectors</td></tr>
+<tr><td>Portal</td><td class="mono">https://&lt;server&gt;:4401</td><td>employees</td></tr>
+</tbody></table></div>
+<div class="warn"><p class="co-h">Plain HTTP is not a supported configuration</p>
+<p>The applications mark their session cookie <code>Secure</code>, and browsers
+discard a <code>Secure</code> cookie that arrived over <code>http://</code>. Over
+HTTP the login page accepts the password, redirects, and returns the user to the
+login page — indefinitely, with <strong>no error in any log</strong>. If you are
+diagnosing a login loop, check the scheme first.</p></div>
+<h4>On a private network</h4>
+<p>The certificate is issued by a small certificate authority running inside your
+own installation. A public authority cannot issue for a name that does not
+resolve on the internet — it has to reach the server from outside, which is
+exactly what this deployment avoids. Export the root certificate once:</p>
+<div class="code"><button class="copy" type="button">Copy</button><pre>docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt .</pre></div>
+<p>Then distribute it as a trusted root:</p>
+<ul>
+<li><strong>Windows</strong> — Group Policy: Computer Configuration → Windows Settings → Security Settings → Public Key Policies → <em>Trusted Root Certification Authorities</em> → Import. This is the supported path for a fleet; per-machine double-click works for a pilot.</li>
+<li><strong>macOS</strong> — Keychain Access → System → set to <em>Always Trust</em>, or push via MDM.</li>
+<li><strong>Linux</strong> — copy to <code>/usr/local/share/ca-certificates/</code> and run <code>sudo update-ca-certificates</code>.</li>
+<li><strong>iOS / Android</strong> — distribute as a configuration profile through your MDM.</li>
+</ul>
+<p><strong>Budget for this as a rollout task, not a footnote.</strong> Until the
+root is trusted, every browser shows a warning and some managed browsers will
+refuse outright.</p>
+<h4>On a publicly resolvable hostname</h4>
+<p>Set <code>SITE_ADDRESS</code> to the name and
+<code>CADDYFILE=Caddyfile.public</code> in <code>.env</code>. A normal
+certificate is then obtained and renewed automatically, and port <code>80</code>
+must be reachable for the issuing check only. This does not publish the
+applications — it publishes a challenge response.</p>
+</section><section class="sec" id="access-en"><span class="sec-n">07</span><h2>Identity, access, and what we cannot do</h2>
+<h4>Who can sign in</h4>
+<p>Only accounts your administrator creates in this installation. Passwords are
+stored hashed with a memory-hard function; there is no default account, no
+shared account and no vendor account. Sessions are cookie-based, marked
+<code>Secure</code> and <code>HttpOnly</code>.</p>
+<h4>The three applications have different audiences</h4>
+<div class="tw"><table>
+<thead><tr><th>Application</th><th>Who</th><th>Sees</th></tr></thead><tbody>
+<tr><td>Console</td><td>payroll staff</td><td>clients, employees, runs, payslips</td></tr>
+<tr><td>Admin</td><td>your administrators</td><td>settings, users, connectors, policies</td></tr>
+<tr><td>Portal</td><td>employees of your clients</td><td><strong>only their own</strong> documents and payslips</td></tr>
+</tbody></table></div>
+<p>The portal answers only on the hostname registered at install time and refuses
+requests arriving on any other name. An employee cannot reach a colleague's
+payslip, including a colleague with the same name.</p>
+<div class="note"><p class="co-h">What the vendor can and cannot do</p>
+<p><strong>We have no access to this installation.</strong> No tunnel, no
+support account, no key, no remote console. We cannot read your data, restart
+your services or push a configuration change. If you want us to investigate
+something, you send us what you choose to send. The one thing that reaches us
+without you acting is the telemetry in §8, and you can switch that off.</p></div>
+<h4>What to do about a departing employee</h4>
+<p>Disable the account in Admin. Also review §5 — if that person held the only
+copy of the key file, obtain it before their access ends.</p>
+</section><section class="sec" id="egress-en"><span class="sec-n">08</span><h2>Exactly what leaves your network</h2>
+<p>Four destinations, and this is the complete list. Put them in your egress
+allow-list; everything else from this server should be denied.</p>
+<div class="tw"><table>
+<thead><tr><th>Destination</th><th>Why</th><th>Required</th></tr></thead><tbody>
+<tr><td class="mono">dekelmichpalil.azurecr.io</td><td>Software images, at install and update</td><td><strong>Yes</strong></td></tr>
+<tr><td class="mono">api.anthropic.com</td><td>AI vendor, reached only by the gateway</td><td>Only if AI features are enabled</td></tr>
+<tr><td class="mono">api.interfaze.ai</td><td><strong>Second AI vendor</strong>, used for reading documents</td><td>Only if document extraction is enabled</td></tr>
+<tr><td class="mono">your reporting endpoint</td><td>Aggregate telemetry, if configured</td><td>No — blank means nothing is sent</td></tr>
+</tbody></table></div>
+<div class="warn"><p class="co-h">There are two AI vendors, not one</p>
+<p>Document reading — attendance sheets, payslips, forms, contracts — runs
+against <strong>Interfaze</strong>, a smaller vendor, with the other model used
+as a checking pass. An allow-list or a data-processing register that names only
+the well-known one is incomplete. We would rather you learn this from a document
+than from a firewall log.</p></div>
+<h4>What is actually sent, per destination</h4>
+<ol>
+<li><strong>AI requests</strong> go through the gateway with identifying values
+replaced by placeholders and restored in the answer. Documents are converted to
+text <em>on this server</em>; only the pseudonymized text crosses. Anything OCR
+cannot read is refused rather than forwarded. Attachments are
+<strong>blocked by default</strong> — the setting is yours to change knowingly.</li>
+<li><strong>Telemetry</strong>, if you configure it: counts, durations, error
+codes and hashed identifiers, checked against an allow-list immediately before
+sending, so anything that is not a number, timestamp, hash or known code is
+refused by construction. <code>GET /snapshot</code> on the telemetry service
+shows you exactly what would be sent, before it is sent.</li>
+<li><strong>Image downloads</strong> at install and update. No payload of yours.</li>
+</ol>
+<h4>Turning the AI off entirely</h4>
+<p>The deterministic payroll automation — the part that drives your payroll
+system — <strong>uses no model at all</strong> and costs nothing to run. If your
+review concludes that no data may reach an AI vendor, set the gateway to refuse
+and remove both vendor hostnames from your allow-list. What you lose is document
+extraction, automatic ticket answering, and the self-healing fallback when the
+payroll system's screens change: a changed screen then stops the run with an
+error instead of recovering on its own.</p>
+</section><section class="sec" id="updates-en"><span class="sec-n">09</span><h2>Updates</h2>
+<p>The installation checks for a new release every ten minutes and applies it on
+its own. It follows the <code>stable</code> channel — the release we have
+blessed, not whatever was built most recently.</p>
+<div class="tw"><table>
+<thead><tr><th>&nbsp;</th><th>Updates automatically</th></tr></thead><tbody>
+<tr><td>The applications</td><td><strong>Yes</strong> — a few seconds each, one at a time</td></tr>
+<tr><td>The database</td><td><strong>Never.</strong> A database upgrade is a data migration, and not something to perform unattended at 03:00</td></tr>
+<tr><td>The payroll-system connector</td><td><strong>No</strong>, by default — it runs one session at a time and holds a run's state in memory, so restarting it mid-run would end that payroll run without reporting it</td></tr>
+</tbody></table></div>
+<div class="warn"><p class="co-h">Decide about this one before you deploy</p>
+<p>The updater needs access to the Docker service on this machine, which in
+practice makes it as privileged as the host's administrator account. That is the
+cost of unattended security patching on a server nobody logs into. <strong>If
+your security policy does not permit it, that is a legitimate conclusion</strong>
+— set <code>AUTO_UPDATE_MONITOR_ONLY=true</code> and update deliberately.</p></div>
+<div class="code"><button class="copy" type="button">Copy</button><pre>AUTO_UPDATE_MONITOR_ONLY=true   <span class="c"># reports what it would do, changes nothing</span>
+BUNDLE_VERSION=1.1.3            <span class="c"># pin an exact version; updates never fire</span></pre></div>
+<p>Either way, <code>./install.sh update</code> applies the current release
+immediately, under your control.</p>
+<h4>Verify that an update actually happened</h4>
+<p>Do not infer this from the absence of errors. An updater that cannot reach the
+registry logs a refusal and still finishes its cycle reporting nothing updated,
+which reads as a quiet, healthy system. Check the running version directly:</p>
+<div class="code"><button class="copy" type="button">Copy</button><pre>./install.sh status              <span class="c"># prints the running version of each service</span>
+docker compose logs watchtower | tail -20</pre></div>
+<p>The version is also shown in the sidebar of the console and the admin. After a
+release, confirm the number changed. We consider this a routine monthly check,
+not a troubleshooting step.</p>
+</section><section class="sec" id="backup-en"><span class="sec-n">10</span><h2>Backup and restore</h2>
+<div class="code"><button class="copy" type="button">Copy</button><pre>./install.sh backup   <span class="c"># database + documents, into ./backups/&lt;timestamp&gt;/</span></pre></div>
+<p>It writes two artefacts: a database dump and an archive of the stored
+documents. <strong>You need both.</strong> A database restored without the
+documents gives you an installation in which every employee exists and none of
+their files open.</p>
+<div class="tw"><table>
+<thead><tr><th>Artefact</th><th>Contains</th><th>Readable without <code>.env</code></th></tr></thead><tbody>
+<tr><td>Database dump</td><td>clients, employees, runs, payslip metadata</td><td><strong>No</strong> — identity numbers stay encrypted</td></tr>
+<tr><td>Document archive</td><td>sealed employee documents</td><td><strong>No</strong></td></tr>
+<tr><td><code>.env</code></td><td>the keys for both of the above</td><td>—</td></tr>
+</tbody></table></div>
+<div class="warn"><p class="co-h">Store the key separately from the archives</p>
+<p>An archive sitting beside the key that decrypts it is one theft, not two. The
+encryption is only worth what your storage layout makes it worth.</p></div>
+<h4>Recommended schedule</h4>
+<ul>
+<li><strong>Daily</strong>, retained per your own policy, taken to storage that is not this machine.</li>
+<li><strong>Before every month-close</strong>, and before any deliberate update.</li>
+<li><strong>Test a restore at least once</strong>, onto a spare machine, before you rely on it. A backup nobody has restored is a hypothesis.</li>
+</ul>
+</section><section class="sec" id="audit-en"><span class="sec-n">11</span><h2>Logging and audit</h2>
+<p>Everything below stays on this machine unless you configure the reporting
+endpoint in §8.</p>
+<div class="tw"><table>
+<thead><tr><th>Log</th><th>Contains</th><th>Where</th></tr></thead><tbody>
+<tr><td>Audit trail</td><td>who did what, to which record, when</td><td>the database; visible in the console</td></tr>
+<tr><td>Egress log</td><td>every AI request: when, which service, how many values were replaced, outcome</td><td>the database</td></tr>
+<tr><td>Container logs</td><td>operational detail</td><td><code>docker compose logs</code></td></tr>
+<tr><td>Payroll run history</td><td>each run, its steps, its result</td><td>the database; visible in the console</td></tr>
+</tbody></table></div>
+<p>The egress log is the one to point a reviewer at: it is the record that lets
+you answer "what has this system sent outside, ever" without taking our word for
+anything.</p>
+<div class="code"><button class="copy" type="button">Copy</button><pre>./install.sh logs               <span class="c"># follow everything</span>
+./install.sh logs gateway       <span class="c"># just the process that can egress</span></pre></div>
+<p>Container log rotation follows your Docker daemon's configuration. If you have
+a retention obligation, set it there — we do not override it.</p>
+</section><section class="sec" id="connector-en"><span class="sec-n">12</span><h2>The payroll-system connector</h2>
+<p>Optional. The connector drives your payroll software over RDP on a Windows
+machine on your own network. That traffic never leaves your LAN.</p>
+<div class="code"><button class="copy" type="button">Copy</button><pre>RDP_HOST=10.0.0.20      <span class="c"># the Windows machine</span>
+RDP_USER=...
+RDP_PASS=...
 
-  <section class="step">
-    <div class="step-n">02</div>
-    <div class="step-body">
-      <h2>Install</h2>
-      <div class="code"><button class="copy" type="button">Copy</button><pre>./install.sh install</pre></div>
-      <p>It asks for an email address and a password for the first administrator, then prints the
-        three addresses to open. Running it again is safe — it repairs a half-finished install
-        rather than starting a second one.</p>
-      <div class="note">
-        <p class="note-h">The install comes up empty</p>
-        <p>No clients, no employees, no payslips. Your records arrive through onboarding and the
-          sync from your payroll system. An install that arrived pre-filled would be rows you had
-          to identify and delete before you could trust anything on the screen.</p>
-      </div>
-    </div>
-  </section>
-
-  <section class="step">
-    <div class="step-n">03</div>
-    <div class="step-body">
-      <h2>Back up the key file</h2>
-      <p>The installer writes one file, <code>.env</code>, holding this install's secrets.</p>
-      <div class="warn">
-        <p class="warn-h">Do this before you go further</p>
-        <p>Two of the keys in <code>.env</code> seal data at rest: one encrypts every employee
-          document, the other is what makes an identity number readable. <strong>If the file is
-          lost, the data in the volumes cannot be recovered</strong> — not by us, not by anyone.
-          That is the design, and it is irreversible. Copy it somewhere that is not this machine.</p>
-      </div>
-    </div>
-  </section>
-
-  <section class="step">
-    <div class="step-n">04</div>
-    <div class="step-body">
-      <h2>Open it, and trust the certificate</h2>
-      <div class="tw">
-        <table>
-          <thead><tr><th>&nbsp;</th><th>Address</th><th>Who uses it</th></tr></thead>
-          <tbody>
-            <tr><td>Console</td><td><code>https://&lt;server&gt;:4201</code></td><td>the payroll office</td></tr>
-            <tr><td>Admin</td><td><code>https://&lt;server&gt;:4301</code></td><td>settings, users, connectors</td></tr>
-            <tr><td>Portal</td><td><code>https://&lt;server&gt;:4401</code></td><td>employees</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <p>On the first visit the browser warns that the certificate is not trusted. It is issued by a
-        small certificate authority running inside your own install, because a public authority like
-        Let's Encrypt cannot issue for a name on a private network — it has to reach the server from
-        the internet, which is exactly what this deployment avoids.</p>
-      <p>Fix it once, per machine. Export the root certificate:</p>
-      <div class="code"><button class="copy" type="button">Copy</button><pre>docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt .</pre></div>
-      <p>Then install it as a trusted root authority:</p>
-      <ul>
-        <li><strong>Windows</strong> — double-click <code>root.crt</code> → Install Certificate →
-          Local Machine → Place all certificates in the following store → <em>Trusted Root
-          Certification Authorities</em>. Group Policy can push it to every machine at once.</li>
-        <li><strong>macOS</strong> — open in Keychain Access → System → set to <em>Always Trust</em>.</li>
-        <li><strong>Linux</strong> — copy to <code>/usr/local/share/ca-certificates/</code> and run
-          <code>sudo update-ca-certificates</code>.</li>
-        <li><strong>iOS / Android</strong> — mail the file to the device and install it as a profile.</li>
-      </ul>
-      <div class="note">
-        <p class="note-h">Why plain HTTP is not an option</p>
-        <p>The applications mark their session cookie <code>Secure</code>, and browsers discard a
-          Secure cookie that arrived over <code>http://</code>. Over HTTP the login page accepts the
-          password, redirects, and returns you to the login page — for ever, with no error anywhere.</p>
-      </div>
-      <p>If the server does have a public hostname, set <code>SITE_ADDRESS</code> to it and
-        <code>CADDYFILE=Caddyfile.public</code> in <code>.env</code>; a normal certificate is then
-        obtained automatically, and port 80 must be reachable for the check.</p>
-    </div>
-  </section>
-
-  <section class="step">
-    <div class="step-n">05</div>
-    <div class="step-body">
-      <h2>Connect מיכפל <span style="color:var(--ink-faint);font-weight:400">— optional</span></h2>
-      <p>The connector drives מיכפל over RDP on a Windows machine on your network. In
-        <code>.env</code>, set <code>RDP_HOST</code> to that machine's address and
-        <code>RDP_USER</code> / <code>RDP_PASS</code> to an account that can sign into it, then:</p>
-      <div class="code"><button class="copy" type="button">Copy</button><pre>docker compose --profile michpal up -d</pre></div>
-      <p>One run at a time, deliberately: a Windows machine gives one interactive session per user,
-        and two automations sharing one desktop interfere with each other in ways that are expensive
-        to recover from.</p>
-      <div class="warn">
-        <p class="warn-h">Plan a calibration session</p>
-        <p>The automation recognises screens by their pixels, and it is calibrated against our
-          מיכפל installation. A different version, screen resolution or company book may need
-          recalibrating. Arrange that with us in advance rather than discovering it during a
-          payroll run.</p>
-      </div>
-    </div>
-  </section>
-
-  <section class="plain">
-    <h2>Updates</h2>
-    <p>The install checks for a new version <strong>every ten minutes</strong> and applies it on
-      its own. There is nothing to run.</p>
-    <p>It follows the <code>stable</code> channel — the release we have blessed, not whatever built
-      most recently — so an update only happens when we decide one should. What gets restarted is
-      deliberately narrow:</p>
-    <div class="tw">
-      <table>
-        <thead><tr><th>&nbsp;</th><th>Updates by itself</th></tr></thead>
-        <tbody>
-          <tr><td>The applications</td><td><strong>Yes</strong> — a few seconds each, one at a time</td></tr>
-          <tr><td>The database</td><td><strong>Never.</strong> A database upgrade is a data migration, and not something to do unattended at 03:00.</td></tr>
-          <tr><td>The מיכפל connector</td><td><strong>No</strong>, by default — it runs one session at a time and keeps a run's state in memory, so restarting it mid-run would end that payroll run without reporting it.</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p>To approve every update yourself instead, set one of these in <code>.env</code> and restart.
-      Either way <code>./install.sh update</code> applies the current release immediately.</p>
-    <div class="code"><button class="copy" type="button">Copy</button><pre>AUTO_UPDATE_MONITOR_ONLY=true   <span class="c"># reports what it would do, changes nothing</span>
-BUNDLE_VERSION=1.1.3            <span class="c"># pin a version; updates never fire</span></pre></div>
-    <div class="warn">
-      <p class="warn-h">What the updater is allowed to do</p>
-      <p>It needs access to the Docker service on this machine, which in practice makes it as
-        privileged as the administrator account. That is the cost of unattended security patching
-        on a server nobody logs into. If your security policy does not allow it, use
-        <code>AUTO_UPDATE_MONITOR_ONLY=true</code> and update by hand.</p>
-    </div>
-  </section>
-
-  <section class="plain">
-    <h2>Running it</h2>
-    <div class="code"><button class="copy" type="button">Copy</button><pre>./install.sh status     <span class="c"># what is running, and the addresses</span>
+docker compose --profile michpal up -d</pre></div>
+<p>One run at a time, deliberately: a Windows machine gives one interactive
+session per user, and two automations sharing one desktop interfere with each
+other in ways that are expensive to recover from. Plan for a dedicated machine
+or a dedicated account.</p>
+<div class="warn"><p class="co-h">Schedule a calibration session before you rely on it</p>
+<p>The automation recognises screens by their pixels, and it is calibrated
+against our installation of the payroll software. A different version, screen
+resolution or company book may need recalibrating. <strong>This is the single
+largest unknown in an on-premise deployment</strong> and we would rather agree a
+date for it in advance than discover it during your month-end.</p></div>
+</section><section class="sec" id="ops-en"><span class="sec-n">13</span><h2>Operations reference</h2>
+<div class="code"><button class="copy" type="button">Copy</button><pre>./install.sh status     <span class="c"># what is running, which version, and the addresses</span>
 ./install.sh logs       <span class="c"># follow everything; add a service name for one</span>
-./install.sh backup     <span class="c"># database + documents, into ./backups/&lt;timestamp&gt;/</span>
-./install.sh update     <span class="c"># pull a newer version and restart</span>
+./install.sh backup     <span class="c"># database + documents</span>
+./install.sh update     <span class="c"># apply the current release now</span>
 ./install.sh stop       <span class="c"># stop; your data is untouched</span></pre></div>
-    <h3>Backups</h3>
-    <p><code>backup</code> writes two files: a database dump and an archive of the stored documents.
-      You need both — a database restored without the documents gives you an install where every
-      employee exists and none of their files open.</p>
-    <p>Neither can be read without <code>.env</code>. Keep that copy somewhere else: an archive
-      sitting beside the key that encrypts it is one theft, not two.</p>
-  </section>
-
-  <section class="plain">
-    <h2>What leaves your network</h2>
-    <p>Three things, and nothing else.</p>
-    <ol>
-      <li><strong>Model requests</strong>, through the gateway, with identifying values replaced by
-        placeholders and restored in the answer. Documents are read <em>on this server</em> — a PDF
-        becomes text here, and only the pseudonymised text crosses. What a scan does not yield to
-        OCR is refused rather than forwarded.</li>
-      <li><strong>Aggregate telemetry</strong>, if you enable it: counts, durations, error codes and
-        hashed identifiers. It is checked against an allow-list immediately before sending —
-        anything that is not a number, a timestamp, a hash or a known code is refused, so a name or
-        an error message quoting a screen cannot pass by construction.
-        <code>GET /snapshot</code> on the metrics service shows exactly what would be sent. Leave
-        the <code>BETTERSTACK_*</code> values blank and nothing is reported at all.</li>
-      <li><strong>Image downloads</strong>, when you install or update.</li>
-    </ol>
-    <p>There is no remote access channel. We cannot reach into this install; if you want us to look
-      at something, you send us what you choose to send.</p>
-  </section>
-
-  <section class="plain">
-    <h2>If something is wrong</h2>
-    <div class="tw">
-      <table>
-        <thead><tr><th>Symptom</th><th>Where to look</th></tr></thead>
-        <tbody>
-          <tr><td>The login page returns to itself</td><td>You are on <code>http://</code>. See step 04.</td></tr>
-          <tr><td>"Provision a connector" on a מיכפל action</td><td><code>RDP_HOST</code> is unset, or <code>./install.sh bootstrap</code> has not run.</td></tr>
-          <tr><td>The portal shows nothing on any address</td><td><code>SITE_ADDRESS</code> does not match the hostname you typed. Re-run <code>./install.sh bootstrap</code>.</td></tr>
-          <tr><td>The model refuses a document</td><td><code>GATEWAY_ATTACHMENTS=block</code> and OCR could not read the scan. Use a clearer scan, or set <code>allow</code> knowingly.</td></tr>
-          <tr><td>Reminders never send</td><td><code>./install.sh logs scheduler</code> — it answers 503 when a job has stopped succeeding.</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <footer>
-      <p>Support: <strong>support@dekel.finance</strong>. Include the output of
-        <code>./install.sh status</code> and the install id from <code>.env</code>
-        (<code>METRICS_INSTALL_ID</code>).</p>
-    </footer>
-  </section>
+<h4>Routine checks</h4>
+<div class="tw"><table>
+<thead><tr><th>When</th><th>Check</th></tr></thead><tbody>
+<tr><td>Daily, automatic</td><td>Backup completed and was copied off this machine</td></tr>
+<tr><td>Monthly</td><td>The running version changed after a release (§9)</td></tr>
+<tr><td>Monthly</td><td>Free disk above 20 GB</td></tr>
+<tr><td>Quarterly</td><td>A restore onto a spare machine still works</td></tr>
+<tr><td>On staff change</td><td>Accounts disabled; key-file custody still correct (§5, §7)</td></tr>
+</tbody></table></div>
+<h4>Complete removal</h4>
+<div class="code"><button class="copy" type="button">Copy</button><pre>docker compose down -v   <span class="c"># stops everything and deletes the data volumes</span></pre></div>
+<p>Nothing of yours exists anywhere else, so this is the whole of it. If you had
+configured telemetry, tell us and we will delete what was reported.</p>
+</section><section class="sec" id="trouble-en"><span class="sec-n">14</span><h2>Troubleshooting</h2>
+<div class="tw"><table>
+<thead><tr><th>Symptom</th><th>Cause and action</th></tr></thead><tbody>
+<tr><td>The login page returns to itself, no error anywhere</td><td>You are on <code>http://</code>. See §6 — the browser is discarding a <code>Secure</code> cookie</td></tr>
+<tr><td>Browser warns the certificate is untrusted</td><td>The root has not been distributed yet. §6</td></tr>
+<tr><td>"Provision a connector" on a payroll action</td><td><code>RDP_HOST</code> unset, or the connector profile is not running. §12</td></tr>
+<tr><td>The portal shows nothing on any address</td><td><code>SITE_ADDRESS</code> does not match the hostname typed. Re-run <code>./install.sh bootstrap</code></td></tr>
+<tr><td>A document is refused by the AI step</td><td>Attachments are blocked by default and OCR could not read the scan. Use a clearer scan, or change the setting knowingly. §8</td></tr>
+<tr><td>Reminders never send</td><td><code>./install.sh logs scheduler</code> — it answers 503 when a job has stopped succeeding</td></tr>
+<tr><td>The version never changes after a release</td><td>The updater cannot reach the registry, or is in monitor-only mode. §9 — check the logs, not the absence of errors</td></tr>
+</tbody></table></div>
+</section><section class="sec" id="limits-en"><span class="sec-n">15</span><h2>Limitations, stated plainly</h2>
+<p>An on-premise promise with an unstated gap is worse than a smaller one. These
+are the things this deployment does not do, or does not yet do well.</p>
+<ul>
+<li><strong>Calibration against your payroll software is unproven until we do it.</strong>
+The automation recognises screens by their pixels, measured against our
+installation. Yours is a variable we have not had. §12.</li>
+<li><strong>Inbound email does not reach this installation.</strong> A deployment
+with no inbound path cannot receive a webhook. Features that begin with a client
+emailing you are not available on-premise today; we are building the outbound
+path for it and will not pretend it exists meanwhile.</li>
+<li><strong>OCR quality on real scanned documents is not measured.</strong> It is
+verified against clean renders. A photographed, skewed or low-contrast scan is a
+different problem, and what OCR cannot read is refused rather than guessed.</li>
+<li><strong>The certificate on a private network is self-issued.</strong> Issuing
+from your own PKI is not implemented; what ships is an internal authority you
+must distribute. §6.</li>
+<li><strong>There is no remote support channel.</strong> This is deliberate, and
+it cuts both ways: diagnosis depends on what you send us.</li>
+<li><strong>An air-gapped installation is not supported.</strong> The image
+registry must be reachable at least at install and update time.</li>
+</ul>
+</section><section class="sec" id="support-en"><span class="sec-n">16</span><h2>Support and escalation</h2>
+<p>Write to <strong>support@dekel.finance</strong>. Include the output of
+<code>./install.sh status</code> and the installation id from <code>.env</code>
+(<code>METRICS_INSTALL_ID</code>). Both are safe to send: neither contains
+payroll data or key material.</p>
+<div class="tw"><table>
+<thead><tr><th>Situation</th><th>What we need from you</th></tr></thead><tbody>
+<tr><td>A payroll run failed</td><td>The run id from the console, and the time</td></tr>
+<tr><td>The payroll software's screens changed</td><td>A screenshot of the screen it stopped on — <strong>with client data obscured</strong></td></tr>
+<tr><td>An update did not apply</td><td><code>./install.sh status</code> and the updater's log (§9)</td></tr>
+<tr><td>A suspected security issue</td><td>Write to the same address with <code>SECURITY</code> in the subject. Do not include a live credential</td></tr>
+</tbody></table></div>
+<p>Because we have no access to your installation, everything we can tell you
+comes from what you send. A screenshot with the client's name blacked out is
+usually enough, and is always better than access we would rather not have.</p>
+</section><footer><p>Document for bundle version 1.1.3. Last updated 23 August 2026. Written and maintained by Dekel.</p></footer></div>
+<div id="lang-he" class="wrap" hidden><header class="hero"><p class="eyebrow">מדריך הטמעה</p><h1>הרצת מערכת השכר על התשתית שלכם</h1><p class="lede">מסד הנתונים, הקונסולה, הניהול, פורטל העובדים והמחבר למערכת השכר, על חומרה בשליטתכם.
+   המסמך נכתב עבור מי שצריך לאשר, להתקין ואז להיות אחראי לזה — לא עבור הדגמה.</p></header><nav class="toc" aria-label="תוכן העניינים"><h4>תוכן העניינים</h4><ol><li><a href="#review-he">תקציר לביקורת אבטחה</a></li><li><a href="#arch-he">גבול הרשת</a></li><li><a href="#req-he">דרישות מקדימות</a></li><li><a href="#install-he">התקנה</a></li><li><a href="#keys-he">חומר מפתחות, ומה שאי אפשר לשחזר</a></li><li><a href="#tls-he">TLS ואמון בתעודה</a></li><li><a href="#access-he">זהויות, גישה, ומה שאנחנו לא יכולים לעשות</a></li><li><a href="#egress-he">מה בדיוק יוצא מהרשת שלכם</a></li><li><a href="#updates-he">עדכונים</a></li><li><a href="#backup-he">גיבוי ושחזור</a></li><li><a href="#audit-he">יומנים וביקורת</a></li><li><a href="#connector-he">המחבר למערכת השכר</a></li><li><a href="#ops-he">מדריך תפעול</a></li><li><a href="#trouble-he">איתור תקלות</a></li><li><a href="#limits-he">מגבלות, בלשון ברורה</a></li><li><a href="#support-he">תמיכה והסלמה</a></li></ol></nav><section class="sec" id="review-he"><span class="sec-n">01</span><h2>תקציר לביקורת אבטחה</h2>
+<p>הפרק הזה עונה במקום אחד על השאלות שביקורת אבטחה שואלת ראשונות. כל טענה כאן
+מורחבת בהמשך המסמך, וכל אחת מהן ניתנת לבדיקה על המכונה שלכם ולא רק לאמון בנו.</p>
+<div class="tw"><table>
+<thead><tr><th>שאלה</th><th>תשובה</th></tr></thead><tbody>
+<tr><td>איפה נמצאים נתוני השכר</td><td><strong>על השרת הזה בלבד.</strong> שום רשומת עובד, תלוש או לקוח אינה נשמרת אצלנו.</td></tr>
+<tr><td>חיבורים נכנסים</td><td><strong>אין.</strong> בלי כלל בחומת אש, בלי פורט פתוח, בלי רשומת DNS ציבורית ובלי VPN.</td></tr>
+<tr><td>חיבורים יוצאים</td><td>עד <strong>ארבעה</strong> יעדים ב-HTTPS, מפורטים בפרק 8. אחד הכרחי, השאר הם יכולות שאפשר לוותר עליהן.</td></tr>
+<tr><td>האם הספק יכול להגיע למכונה</td><td><strong>לא.</strong> אין מנהרה, אין ערוץ תמיכה מרחוק ואין שום פרט גישה שלנו על השרת. אם תרצו שנראה משהו — אתם שולחים אותו.</td></tr>
+<tr><td>נתונים במנוחה</td><td>מסמכי עובדים ומספרי תעודת זהות מוצפנים במפתחות שנוצרו על המכונה הזו בזמן ההתקנה ונמצאים רק אצלכם.</td></tr>
+<tr><td>מה נשלח לספק ה-AI</td><td>טקסט מפוסבד בלבד, דרך תהליך יחיד שאי אפשר לעקוף. מסמכים מומרים לטקסט <em>על השרת הזה</em>. צירופי קבצים נדחים כברירת מחדל.</td></tr>
+<tr><td>טלמטריה</td><td>ספירות, משכי זמן וגיבובים, שנבדקים מול רשימת היתר רגע לפני השליחה. משאירים את הערכים ריקים — ולא נשלח דבר.</td></tr>
+<tr><td>הרשאות</td><td>קונטיינרי האפליקציה רצים כמשתמש לא מורשה. <strong>מנגנון העדכון האוטומטי דורש גישה ל-Docker socket</strong> — קראו את פרק 9 לפני שתחליטו.</td></tr>
+<tr><td>מחיקה</td><td>עוצרים את המערכת ומוחקים את הנפחים. שום דבר משלכם לא נשאר במקום אחר.</td></tr>
+<tr><td>קבלני משנה</td><td>מפורטים בפרק 8. יש יותר מאחד, וביקורת ששואלת רק על המובן מאליו לא סיימה.</td></tr>
+</tbody></table></div>
+</section><section class="sec" id="arch-he"><span class="sec-n">02</span><h2>גבול הרשת</h2>
+<p>עשרה קונטיינרים על מכונה אחת. ששת אלה שמחזיקים את הנתונים שלכם יושבים על רשת
+Docker המוגדרת <em>internal</em>, כלומר מנוע Docker לא מתקין ממנה מסלול לשום מקום.
+זה לא כלל בחומת אש שאפשר לערוך, ולא מדיניות שהקוד צריך לזכור: תהליך על הרשת הזו
+שינסה להגיע לאינטרנט פשוט לא יצליח לתרגם את השם.</p>
+<div class="fig">
+  <svg viewBox="0 0 660 250" role="img" aria-label="האפליקציות יושבות ברשת אטומה. רק השער מגיע לספק המודל, ורק אחרי שהחליף ערכים מזהים.">
+    <rect class="b-seal" x="8" y="8" width="420" height="234" rx="10"/>
+    <text class="b-s" x="24" y="30" direction="rtl">הבניין שלכם — בלי מסלול לאינטרנט</text>
+    <rect class="b-box" x="30" y="48" width="112" height="38" rx="6"/><text class="b-t" x="52" y="72" direction="rtl">קונסולה</text>
+    <rect class="b-box" x="30" y="96" width="112" height="38" rx="6"/><text class="b-t" x="60" y="120" direction="rtl">ניהול</text>
+    <rect class="b-box" x="30" y="144" width="112" height="38" rx="6"/><text class="b-t" x="58" y="168" direction="rtl">פורטל</text>
+    <rect class="b-box" x="30" y="192" width="112" height="38" rx="6"/><text class="b-t" x="48" y="216" direction="rtl">מסד נתונים</text>
+    <path class="b-l" d="M142 115 H228" stroke-width="1.5" marker-end="url(#b)"/>
+    <rect class="b-gate" x="232" y="86" width="120" height="58" rx="8"/>
+    <text class="b-t" x="270" y="110" direction="rtl">שער</text><text class="b-s" x="248" y="128" direction="rtl">קורא ומחליף</text>
+    <path class="b-x" d="M170 205 H250" stroke-width="1.5"/>
+    <path class="b-x" d="M204 195 l16 20 M220 195 l-16 20" stroke-width="1.5"/>
+    <text class="b-s" x="258" y="209" direction="rtl">קריאה שעוקפת אותו לא מתחברת</text>
+    <path class="b-l" d="M352 115 H520" stroke-width="1.5" marker-end="url(#b)"/>
+    <rect class="b-out" x="524" y="86" width="120" height="58" rx="8"/>
+    <text class="b-t" x="556" y="118" direction="rtl">ספק ה-AI</text>
+    <text class="b-s" x="368" y="106">[PII:ID:1]</text><text class="b-s" x="368" y="136" direction="rtl">אף פעם לא שם</text>
+    <defs><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="currentColor" style="color: var(--ink-faint)"/></marker></defs>
+  </svg>
+  <p class="cap">ערכים מזהים מוחלפים לפני שמשהו יוצא, ומוחזרים בתשובה.</p>
 </div>
-
-<!-- ══════════════════════════ עברית ══════════════════════════ -->
-<div id="lang-he" class="wrap" hidden>
-
-  <header class="hero">
-    <p class="eyebrow">מדריך התקנה</p>
-    <h1>הרצת מערכת השכר על השרת שלכם</h1>
-    <p class="lede">מסד הנתונים, הקונסולה, הניהול, פורטל העובדים והמחבר למיכפל — הכל על חומרה
-      בבעלותכם. בערך עשרים דקות, רובן הורדה.</p>
-  </header>
-
-  <section class="plain">
-    <h2>מה מתקינים</h2>
-    <p>עשרה קונטיינרים על מכונה אחת. ששה מהם — הקונסולה, הניהול, הפורטל, הסוכן,
-      המתזמן ומסד הנתונים — יושבים על רשת Docker שאין לה
-      <strong>שום מסלול לאינטרנט</strong> — לא כמדיניות אלא כעובדה במבנה הרשת. קריאה שתנסה
-      לעקוף את השער לא תדלוף; היא פשוט לא תצליח להתחבר. רק ארבעה קונטיינרים יכולים
-      לצאת החוצה — השער, שירות הטלמטריה, שרת התעודות ומנגנון העדכון.</p>
-
-    <div class="fig">
-      <svg viewBox="0 0 660 250" role="img" aria-label="האפליקציות יושבות ברשת אטומה. רק השער מגיע לספק המודל, ורק אחרי שהחליף ערכים מזהים.">
-        <rect class="b-seal" x="8" y="8" width="420" height="234" rx="10"/>
-        <text class="b-s" x="24" y="30" direction="rtl">הבניין שלכם — בלי מסלול לאינטרנט</text>
-        <rect class="b-box" x="30" y="48" width="112" height="38" rx="6"/>
-        <text class="b-t" x="52" y="72" direction="rtl">קונסולה</text>
-        <rect class="b-box" x="30" y="96" width="112" height="38" rx="6"/>
-        <text class="b-t" x="60" y="120" direction="rtl">ניהול</text>
-        <rect class="b-box" x="30" y="144" width="112" height="38" rx="6"/>
-        <text class="b-t" x="58" y="168" direction="rtl">פורטל</text>
-        <rect class="b-box" x="30" y="192" width="112" height="38" rx="6"/>
-        <text class="b-t" x="48" y="216" direction="rtl">מסד נתונים</text>
-
-        <path class="b-l" d="M142 115 H228" stroke-width="1.5" fill="none" marker-end="url(#b)"/>
-        <rect class="b-gate" x="232" y="86" width="120" height="58" rx="8"/>
-        <text class="b-t" x="270" y="110" direction="rtl">שער</text>
-        <text class="b-s" x="248" y="128" direction="rtl">קורא ומחליף</text>
-
-        <path class="b-x" d="M170 205 H250" stroke-width="1.5" fill="none"/>
-        <path class="b-x" d="M204 195 l16 20 M220 195 l-16 20" stroke-width="1.5"/>
-        <text class="b-s" x="258" y="209" direction="rtl">קריאה שעוקפת אותו לא מתחברת</text>
-
-        <path class="b-l" d="M352 115 H520" stroke-width="1.5" fill="none" marker-end="url(#b)"/>
-        <rect class="b-out" x="524" y="86" width="120" height="58" rx="8"/>
-        <text class="b-t" x="556" y="118" direction="rtl">ספק המודל</text>
-        <text class="b-s" x="368" y="106">[PII:ID:1]</text>
-        <text class="b-s" x="368" y="136" direction="rtl">אף פעם לא שם</text>
-
-        <defs>
-          <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-            <path d="M0 0 L10 5 L0 10 z" fill="currentColor" style="color: var(--ink-faint)"/>
-          </marker>
-        </defs>
-      </svg>
-      <p class="cap">ערכים מזהים מוחלפים לפני שמשהו יוצא, ומוחזרים בתשובה.</p>
-    </div>
-  </section>
-
-  <section class="plain">
-    <h2>לפני שמתחילים</h2>
-    <div class="tw">
-      <table>
-        <thead><tr><th>&nbsp;</th><th>מינימום</th><th>מומלץ</th></tr></thead>
-        <tbody>
-          <tr><td>מעבד</td><td class="num">4 ליבות</td><td class="num">8 ליבות</td></tr>
-          <tr><td>זיכרון</td><td class="num">8 ג׳יגה</td><td class="num">16 ג׳יגה</td></tr>
-          <tr><td>דיסק</td><td class="num">40 ג׳יגה פנויים</td><td class="num">100 ג׳יגה SSD</td></tr>
-          <tr><td>מערכת הפעלה</td><td>לינוקס, Docker Engine 24+, Compose v2.20+</td><td>Ubuntu 22.04 / 24.04 LTS</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p>גישה יוצאת ב-HTTPS לשני שרתים בלבד, <strong>וללא שום גישה נכנסת מהאינטרנט</strong>:</p>
-    <ul>
-      <li><code>dekelmichpalil.azurecr.io</code> — משם מורידים את התוכנה.</li>
-      <li><code>api.anthropic.com</code> — ספק המודל, שאליו ניגש רק השער.</li>
-    </ul>
-    <p>אין צורך בפרטי גישה כדי להוריד את התוכנה — התמונות מוגשות באופן ציבורי ואינן מכילות קוד
-      מקור. צריך מפתח לספק המודל (או שנספק אחד), ורק אם רוצים את המחבר — את מכונת ה-Windows
-      שמריצה מיכפל, נגישה מהשרת הזה בפורט 3389.</p>
-  </section>
-
-  <section class="step">
-    <div class="step-n">01</div>
-    <div class="step-body">
-      <h2>בדיקת המכונה</h2>
-      <p>הפקודה לא כותבת דבר. היא מדווחת מה חסר ועוצרת.</p>
-      <div class="code"><button class="copy" type="button">העתק</button><pre><span class="c"># הורדת הערכה</span>
-git clone https://github.com/Dekel-finance/payroll-onprem.git
+<div class="tw"><table>
+<thead><tr><th>קונטיינר</th><th>מחזיק נתוני שכר</th><th>יכול להגיע לאינטרנט</th></tr></thead><tbody>
+<tr><td>מסד הנתונים</td><td>כן</td><td>לא</td></tr>
+<tr><td>קונסולה, ניהול, פורטל</td><td>כן</td><td>לא</td></tr>
+<tr><td>סוכן, מתזמן</td><td>כן</td><td>לא</td></tr>
+<tr><td>שער</td><td>במעבר בלבד</td><td><strong>כן</strong> — ספקי ה-AI, ולא יותר</td></tr>
+<tr><td>טלמטריה</td><td>לא</td><td><strong>כן</strong> — נקודת הדיווח שתגדירו</td></tr>
+<tr><td>שרת הווב</td><td>לא</td><td><strong>כן</strong> — רק להנפקת תעודה ציבורית, אם בחרתם בכך</td></tr>
+<tr><td>מנגנון העדכון</td><td>לא</td><td><strong>כן</strong> — מאגר התמונות</td></tr>
+</tbody></table></div>
+<p>אפשר לאמת את ההפרדה בעצמכם בכל רגע, בלי עזרה מאיתנו:</p>
+<div class="code"><button class="copy" type="button">העתק</button><pre><span class="c"># אמור להיכשל: לאפליקציות אין מסלול החוצה</span>
+docker compose exec console node -e "fetch('https://example.com').catch(e=>{console.log('no route:',e.message);process.exit(0)}).then(()=>process.exit(1))"</pre></div>
+</section><section class="sec" id="req-he"><span class="sec-n">03</span><h2>דרישות מקדימות</h2>
+<div class="tw"><table>
+<thead><tr><th>&nbsp;</th><th>מינימום</th><th>מומלץ</th></tr></thead><tbody>
+<tr><td>מעבד</td><td class="num">4 ליבות</td><td class="num">8 ליבות</td></tr>
+<tr><td>זיכרון</td><td class="num">8 ג׳יגה</td><td class="num">16 ג׳יגה</td></tr>
+<tr><td>דיסק</td><td class="num">40 ג׳יגה פנויים</td><td class="num">100 ג׳יגה SSD</td></tr>
+<tr><td>מערכת הפעלה</td><td>לינוקס, Docker Engine 24+, Compose v2.20+</td><td>Ubuntu 22.04 / 24.04 LTS</td></tr>
+</tbody></table></div>
+<h4>פורטים</h4>
+<div class="tw"><table>
+<thead><tr><th>כיוון</th><th>פורט</th><th>בין</th></tr></thead><tbody>
+<tr><td>רשת פנימית, נכנס לשרת</td><td class="mono">443</td><td>דפדפני העובדים ← שלוש האפליקציות</td></tr>
+<tr><td>רשת פנימית, יוצא מהשרת</td><td class="mono">3389</td><td>המחבר ← מכונת ה-Windows של מערכת השכר. <strong>לא יוצא מהרשת שלכם</strong></td></tr>
+<tr><td>אינטרנט, יוצא</td><td class="mono">443</td><td>השרת הזה ← היעדים שבפרק 8</td></tr>
+<tr><td>אינטרנט, נכנס</td><td colspan="2"><strong>אין, בשום נקודת גבול</strong></td></tr>
+</tbody></table></div>
+<p>פורט <code>80</code> נדרש רק אם בחרתם בשם מתחם ציבורי ורוצים תעודה שמונפקת
+אוטומטית; ראו פרק 6. ברשת פרטית הוא נשאר סגור.</p>
+<h4>מה צריך להחליט מראש</h4>
+<ul>
+<li>שם מתחם שהעובדים יקלידו. שם פרטי כמו <code>payroll.office.local</code> תקין וזה המצב הרגיל.</li>
+<li>האם יכולות מבוססות AI רלוונטיות לכם בכלל (פרק 8). אפשר לכבות אותן לגמרי, ואוטומציית השכר ממשיכה לעבוד.</li>
+<li>מיהו המנהל הראשון — כתובת דוא״ל וסיסמה, שנקבעים בזמן ההתקנה.</li>
+<li>לאן מגובה קובץ המפתחות (פרק 5). החליטו על כך <em>לפני</em> ההתקנה.</li>
+</ul>
+</section><section class="sec" id="install-he"><span class="sec-n">04</span><h2>התקנה</h2>
+<h4>שלב 1 — בדיקת המכונה</h4>
+<p>הפקודה אינה כותבת דבר. היא מדווחת מה חסר ועוצרת.</p>
+<div class="code"><button class="copy" type="button">העתק</button><pre>git clone https://github.com/Dekel-finance/payroll-onprem.git
 cd payroll-onprem
-
 ./install.sh check</pre></div>
-      <p>היא בודקת גרסאות של Docker ו-Compose, ליבות, זיכרון, מקום פנוי, את שני השרתים שלמעלה,
-        ואם שלושת הפורטים פנויים. כל מה שמסומן ב-<code>!</code> צריך תיקון קודם.</p>
-    </div>
-  </section>
+<p>היא בודקת גרסאות Docker ו-Compose, ליבות, זיכרון, מקום פנוי, שהיעדים היוצאים
+נפתרים, ושהפורטים פנויים. כל מה שמסומן ב-<code>!</code> חייב תיקון קודם.</p>
+<h4>שלב 2 — התקנה</h4>
+<div class="code"><button class="copy" type="button">העתק</button><pre>./install.sh install</pre></div>
+<p>ההתקנה מבקשת דוא״ל וסיסמה למנהל הראשון, ואז מדפיסה את הכתובות לפתיחה. אפשר
+להריץ שוב בבטחה: היא מתקנת התקנה שלא הושלמה במקום להתחיל שנייה.</p>
+<div class="note"><p class="co-h">המערכת עולה ריקה, במכוון</p>
+<p>בלי לקוחות, בלי עובדים, בלי תלושים. הרשומות שלכם נכנסות דרך תהליך הקליטה
+והסנכרון ממערכת השכר. התקנה שמגיעה מלאה מראש הייתה משאירה לצוות שלכם שורות שצריך
+לזהות ולמחוק לפני שאפשר לסמוך על משהו במסך, ואנחנו לא מוכנים להעמיד אתכם במצב הזה.</p></div>
+<h4>שלב 3 — תיעוד מה שיש עכשיו בידיכם</h4>
+<p>לפני שממשיכים, השלימו את פרק 5. זהו השלב היחיד במסמך הזה שאי אפשר לתקן בדיעבד.</p>
+</section><section class="sec" id="keys-he"><span class="sec-n">05</span><h2>חומר מפתחות, ומה שאי אפשר לשחזר</h2>
+<p>ההתקנה יוצרת קובץ אחד, <code>.env</code>, שמחזיק את הסודות של ההתקנה הזו. שניים
+מהמפתחות שבו מצפינים נתונים במנוחה: אחד אוטם כל מסמך של עובד, והשני הוא מה
+שמאפשר לקרוא מספר תעודת זהות.</p>
+<div class="stop"><p class="co-h">זה בלתי הפיך, וזה התכנון</p>
+<p><strong>אם <code>.env</code> אובד, אי אפשר לשחזר את הנתונים שבנפחים — לא אתם,
+לא אנחנו, ואף אחד אחר.</strong> אין ברשותנו עותק ואין נאמנות מפתחות. בדיוק זה מה
+שנותן להצפנה משמעות: אין מפתח שלנו שאפשר לדרוש בצו, לגנוב או להשתמש בו בטעות. זה
+גם אומר שהגיבוי של הקובץ הזה באחריותכם ולא באחריות אף אחד אחר.</p></div>
+<div class="code"><button class="copy" type="button">העתק</button><pre><span class="c"># העתיקו למקום שאינו המכונה הזו, לפני שממשיכים</span>
+cp .env /secure/offline/location/payroll-env-$(date +%F)</pre></div>
+<div class="warn"><p class="co-h">לעולם אל תייצרו מחדש את שני המפתחות האלה</p>
+<p>ייצור מחדש של <code>NATIONAL_ID_KEYS</code> או <code>PORTAL_FILE_KEK</code>
+בהתקנה שכבר מחזיקה רשומות מנתק כל מספר זהות וכל מסמך אטום שכבר נכתבו. השורות
+נשארות; התוכן שלהן הופך לבלתי קריא לצמיתות.</p></div>
+<h4>טיפול מומלץ</h4>
+<ul>
+<li>שמרו אותו במקום שבו הארגון שלכם שומר פרטי גישה מסוג שורש — מנהל סיסמאות עם יומן ביקורת, או עותק אופליין אטום.</li>
+<li><strong>אל תשמרו את העותק היחיד ליד הגיבויים.</strong> ארכיון שיושב ליד המפתח שמפענח אותו הוא גניבה אחת, לא שתיים.</li>
+<li>תעדו מי מחזיק אותו. התקנה שהמפתח שלה ידוע רק למי שכבר עזב את המשרד היא תקלה שמחכה לרגע שלה.</li>
+</ul>
+</section><section class="sec" id="tls-he"><span class="sec-n">06</span><h2>TLS ואמון בתעודה</h2>
+<p>הגישה לאפליקציות היא ב-HTTPS בכתובות:</p>
+<div class="tw"><table>
+<thead><tr><th>&nbsp;</th><th>כתובת</th><th>מי משתמש</th></tr></thead><tbody>
+<tr><td>קונסולה</td><td class="mono">https://&lt;server&gt;:4201</td><td>לשכת השכר</td></tr>
+<tr><td>ניהול</td><td class="mono">https://&lt;server&gt;:4301</td><td>הגדרות, משתמשים, מחברים</td></tr>
+<tr><td>פורטל</td><td class="mono">https://&lt;server&gt;:4401</td><td>עובדים</td></tr>
+</tbody></table></div>
+<div class="warn"><p class="co-h">HTTP רגיל אינו תצורה נתמכת</p>
+<p>האפליקציות מסמנות את עוגיית ההתחברות כ-<code>Secure</code>, ודפדפנים משליכים
+עוגייה כזו שהגיעה דרך <code>http://</code>. מעל HTTP דף ההתחברות יקבל את הסיסמה,
+יעביר את המשתמש, ויחזיר אותו לדף ההתחברות — שוב ושוב, <strong>בלי שגיאה בשום
+יומן</strong>. אם אתם מאבחנים לולאת התחברות, בדקו קודם כול את הפרוטוקול.</p></div>
+<h4>ברשת פרטית</h4>
+<p>התעודה מונפקת על ידי רשות אישורים קטנה שרצה בתוך ההתקנה שלכם. רשות ציבורית לא
+יכולה להנפיק לשם שאינו נפתר באינטרנט — היא חייבת להגיע לשרת מבחוץ, וזה בדיוק מה
+שההתקנה הזו נמנעת ממנו. ייצאו את אישור השורש פעם אחת:</p>
+<div class="code"><button class="copy" type="button">העתק</button><pre>docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt .</pre></div>
+<p>ואז הפיצו אותו כרשות שורש מהימנה:</p>
+<ul>
+<li><strong>Windows</strong> — Group Policy: Computer Configuration ← Windows Settings ← Security Settings ← Public Key Policies ← <em>Trusted Root Certification Authorities</em> ← Import. זהו המסלול הנתמך לארגון; לחיצה כפולה פר מחשב מתאימה לפיילוט.</li>
+<li><strong>macOS</strong> — Keychain Access ← System ← <em>Always Trust</em>, או הפצה דרך MDM.</li>
+<li><strong>לינוקס</strong> — להעתיק ל-<code>/usr/local/share/ca-certificates/</code> ולהריץ <code>sudo update-ca-certificates</code>.</li>
+<li><strong>iOS / Android</strong> — להפיץ כפרופיל תצורה דרך ה-MDM שלכם.</li>
+</ul>
+<p><strong>תכננו את זה כמשימת הטמעה, לא כהערת שוליים.</strong> עד שאישור השורש
+מהימן, כל דפדפן מציג אזהרה וחלק מהדפדפנים המנוהלים פשוט יסרבו.</p>
+<h4>עם שם מתחם ציבורי</h4>
+<p>הגדירו את <code>SITE_ADDRESS</code> לשם ואת <code>CADDYFILE=Caddyfile.public</code>
+בקובץ <code>.env</code>. אז תונפק ותחודש תעודה רגילה אוטומטית, ופורט <code>80</code>
+צריך להיות נגיש לבדיקת ההנפקה בלבד. זה לא מפרסם את האפליקציות — זה מפרסם תשובה
+לאתגר.</p>
+</section><section class="sec" id="access-he"><span class="sec-n">07</span><h2>זהויות, גישה, ומה שאנחנו לא יכולים לעשות</h2>
+<h4>מי יכול להתחבר</h4>
+<p>רק חשבונות שהמנהל שלכם יוצר בהתקנה הזו. סיסמאות נשמרות מגובבות בפונקציה עתירת
+זיכרון; אין חשבון ברירת מחדל, אין חשבון משותף ואין חשבון של הספק. ההפעלות
+מבוססות עוגייה, מסומנות <code>Secure</code> ו-<code>HttpOnly</code>.</p>
+<h4>לשלוש האפליקציות קהלים שונים</h4>
+<div class="tw"><table>
+<thead><tr><th>אפליקציה</th><th>מי</th><th>רואה</th></tr></thead><tbody>
+<tr><td>קונסולה</td><td>צוות השכר</td><td>לקוחות, עובדים, הרצות, תלושים</td></tr>
+<tr><td>ניהול</td><td>המנהלים שלכם</td><td>הגדרות, משתמשים, מחברים, נהלים</td></tr>
+<tr><td>פורטל</td><td>עובדים של הלקוחות שלכם</td><td><strong>רק את שלהם</strong> — מסמכים ותלושים</td></tr>
+</tbody></table></div>
+<p>הפורטל עונה רק בשם המתחם שנרשם בזמן ההתקנה ודוחה בקשות שמגיעות בכל שם אחר.
+עובד אינו יכול להגיע לתלוש של עמית, כולל עמית בעל אותו שם.</p>
+<div class="note"><p class="co-h">מה הספק יכול ומה אינו יכול</p>
+<p><strong>אין לנו גישה להתקנה הזו.</strong> אין מנהרה, אין חשבון תמיכה, אין
+מפתח ואין קונסולה מרוחקת. אנחנו לא יכולים לקרוא את הנתונים שלכם, להפעיל מחדש
+שירותים או לדחוף שינוי תצורה. אם תרצו שנבדוק משהו — אתם שולחים לנו את מה שאתם
+בוחרים לשלוח. הדבר היחיד שמגיע אלינו בלי פעולה שלכם הוא הטלמטריה שבפרק 8, ואפשר
+לכבות אותה.</p></div>
+<h4>מה עושים כשעובד עוזב</h4>
+<p>משביתים את החשבון במסך הניהול. בנוסף חזרו לפרק 5 — אם אותו אדם החזיק את העותק
+היחיד של קובץ המפתחות, קבלו אותו לפני שהגישה שלו נסגרת.</p>
+</section><section class="sec" id="egress-he"><span class="sec-n">08</span><h2>מה בדיוק יוצא מהרשת שלכם</h2>
+<p>ארבעה יעדים, וזו הרשימה המלאה. הכניסו אותם לרשימת ההיתר ליציאה; כל השאר מהשרת
+הזה צריך להיחסם.</p>
+<div class="tw"><table>
+<thead><tr><th>יעד</th><th>לשם מה</th><th>הכרחי</th></tr></thead><tbody>
+<tr><td class="mono">dekelmichpalil.azurecr.io</td><td>תמונות התוכנה, בהתקנה ובעדכון</td><td><strong>כן</strong></td></tr>
+<tr><td class="mono">api.anthropic.com</td><td>ספק AI, שאליו ניגש רק השער</td><td>רק אם יכולות ה-AI פעילות</td></tr>
+<tr><td class="mono">api.interfaze.ai</td><td><strong>ספק AI שני</strong>, לקריאת מסמכים</td><td>רק אם חילוץ מסמכים פעיל</td></tr>
+<tr><td class="mono">נקודת הדיווח שלכם</td><td>טלמטריה מצרפית, אם הוגדרה</td><td>לא — ריק פירושו שלא נשלח דבר</td></tr>
+</tbody></table></div>
+<div class="warn"><p class="co-h">יש שני ספקי AI, לא אחד</p>
+<p>קריאת מסמכים — דוחות נוכחות, תלושים, טפסים, חוזים — רצה מול
+<strong>Interfaze</strong>, ספק קטן יותר, כשהמודל השני משמש למעבר בדיקה. רשימת
+היתר או מרשם עיבוד נתונים שמזכירים רק את הספק המוכר אינם שלמים. עדיף שתגלו את זה
+ממסמך ולא מיומן חומת אש.</p></div>
+<h4>מה נשלח בפועל, לכל יעד</h4>
+<ol>
+<li><strong>בקשות ל-AI</strong> עוברות דרך השער כשערכים מזהים מוחלפים במצייני
+מקום ומוחזרים בתשובה. מסמכים מומרים לטקסט <em>על השרת הזה</em>; רק הטקסט המפוסבד
+חוצה. מה שה-OCR לא מצליח לקרוא נדחה ולא מועבר. צירופי קבצים
+<strong>חסומים כברירת מחדל</strong> — ההגדרה בידיכם, לשינוי מודע.</li>
+<li><strong>טלמטריה</strong>, אם תגדירו אותה: ספירות, משכי זמן, קודי שגיאה
+ומזהים מגובבים, שנבדקים מול רשימת היתר רגע לפני השליחה, כך שכל מה שאינו מספר,
+חותמת זמן, גיבוב או קוד מוכר נדחה מעצם המבנה. <code>GET /snapshot</code> בשירות
+הטלמטריה מציג לכם בדיוק מה היה נשלח, לפני שנשלח.</li>
+<li><strong>הורדת תמונות</strong> בהתקנה ובעדכון. בלי שום תוכן שלכם.</li>
+</ol>
+<h4>כיבוי מוחלט של ה-AI</h4>
+<p>אוטומציית השכר הדטרמיניסטית — החלק שמפעיל את מערכת השכר שלכם —
+<strong>אינה משתמשת במודל כלל</strong> והרצתה אינה עולה דבר. אם הביקורת שלכם
+קובעת ששום נתון לא יגיע לספק AI, הגדירו את השער לסרב והסירו את שני שמות המתחם
+מרשימת ההיתר. מה שמפסידים: חילוץ מסמכים, מענה אוטומטי לפניות, והתאוששות עצמית
+כשמסכי מערכת השכר משתנים — מסך שהשתנה יעצור אז את ההרצה בשגיאה במקום להסתדר לבד.</p>
+</section><section class="sec" id="updates-he"><span class="sec-n">09</span><h2>עדכונים</h2>
+<p>ההתקנה בודקת אם יצאה גרסה חדשה כל עשר דקות ומחילה אותה בעצמה. היא עוקבת אחרי
+ערוץ <code>stable</code> — הגרסה שאישרנו, ולא מה שנבנה לאחרונה.</p>
+<div class="tw"><table>
+<thead><tr><th>&nbsp;</th><th>מתעדכן אוטומטית</th></tr></thead><tbody>
+<tr><td>האפליקציות</td><td><strong>כן</strong> — כמה שניות לכל אחת, אחת בכל פעם</td></tr>
+<tr><td>מסד הנתונים</td><td><strong>אף פעם.</strong> שדרוג מסד נתונים הוא מיגרציית נתונים, ולא משהו שעושים ללא השגחה בשלוש לפנות בוקר</td></tr>
+<tr><td>המחבר למערכת השכר</td><td><strong>לא</strong>, כברירת מחדל — הוא מריץ סשן אחד בכל רגע ושומר את מצב ההרצה בזיכרון, כך שהפעלה מחדש באמצע הרצה הייתה מסיימת את הרצת השכר בלי לדווח</td></tr>
+</tbody></table></div>
+<div class="warn"><p class="co-h">על זה כדאי להחליט לפני ההטמעה</p>
+<p>מנגנון העדכון צריך גישה לשירות ה-Docker במכונה, מה שהופך אותו בפועל למורשה כמו
+חשבון המנהל של המארח. זה המחיר של עדכוני אבטחה ללא השגחה על שרת שאף אחד לא מתחבר
+אליו. <strong>אם מדיניות האבטחה שלכם לא מאפשרת זאת, זו מסקנה לגיטימית</strong> —
+הגדירו <code>AUTO_UPDATE_MONITOR_ONLY=true</code> ועדכנו ביוזמתכם.</p></div>
+<div class="code"><button class="copy" type="button">העתק</button><pre>AUTO_UPDATE_MONITOR_ONLY=true   <span class="c"># מדווח מה היה עושה, לא משנה כלום</span>
+BUNDLE_VERSION=1.1.3            <span class="c"># נעילה לגרסה מדויקת; עדכונים לא ירוצו</span></pre></div>
+<p>בכל מקרה, <code>./install.sh update</code> מחיל את הגרסה הנוכחית מיד, בשליטתכם.</p>
+<h4>איך מוודאים שעדכון באמת קרה</h4>
+<p>אל תסיקו זאת מהיעדר שגיאות. מנגנון עדכון שאינו מצליח להגיע למאגר רושם סירוב
+ובכל זאת מסיים את המחזור בדיווח שלא עודכן דבר — וזה נקרא כמו מערכת שקטה ותקינה.
+בדקו את הגרסה הרצה ישירות:</p>
+<div class="code"><button class="copy" type="button">העתק</button><pre>./install.sh status              <span class="c"># מדפיס את הגרסה הרצה של כל שירות</span>
+docker compose logs watchtower | tail -20</pre></div>
+<p>הגרסה מוצגת גם בסרגל הצד של הקונסולה ושל מסך הניהול. אחרי גרסה חדשה, ודאו
+שהמספר השתנה. אנחנו רואים בזה בדיקה חודשית שגרתית, לא שלב באיתור תקלות.</p>
+</section><section class="sec" id="backup-he"><span class="sec-n">10</span><h2>גיבוי ושחזור</h2>
+<div class="code"><button class="copy" type="button">העתק</button><pre>./install.sh backup   <span class="c"># מסד נתונים + מסמכים, אל ./backups/&lt;timestamp&gt;/</span></pre></div>
+<p>נוצרים שני פריטים: תמונת מסד הנתונים וארכיון המסמכים השמורים.
+<strong>צריך את שניהם.</strong> מסד נתונים ששוחזר בלי המסמכים נותן לכם התקנה שבה
+כל עובד קיים ואף אחד מהקבצים שלו לא נפתח.</p>
+<div class="tw"><table>
+<thead><tr><th>פריט</th><th>מכיל</th><th>קריא בלי <code>.env</code></th></tr></thead><tbody>
+<tr><td>תמונת מסד הנתונים</td><td>לקוחות, עובדים, הרצות, נתוני תלושים</td><td><strong>לא</strong> — מספרי זהות נשארים מוצפנים</td></tr>
+<tr><td>ארכיון המסמכים</td><td>מסמכי עובדים אטומים</td><td><strong>לא</strong></td></tr>
+<tr><td><code>.env</code></td><td>המפתחות לשני אלה</td><td>—</td></tr>
+</tbody></table></div>
+<div class="warn"><p class="co-h">שמרו את המפתח בנפרד מהארכיונים</p>
+<p>ארכיון שיושב ליד המפתח שמפענח אותו הוא גניבה אחת, לא שתיים. ההצפנה שווה בדיוק
+כמה שמבנה האחסון שלכם עושה אותה שווה.</p></div>
+<h4>תדירות מומלצת</h4>
+<ul>
+<li><strong>יומי</strong>, בשמירה לפי המדיניות שלכם, אל אחסון שאינו המכונה הזו.</li>
+<li><strong>לפני כל סגירת חודש</strong>, ולפני כל עדכון יזום.</li>
+<li><strong>בדקו שחזור לפחות פעם אחת</strong>, על מכונה חלופית, לפני שאתם נשענים עליו. גיבוי שאיש לא שיחזר הוא השערה.</li>
+</ul>
+</section><section class="sec" id="audit-he"><span class="sec-n">11</span><h2>יומנים וביקורת</h2>
+<p>כל מה שלהלן נשאר על המכונה הזו, אלא אם תגדירו את נקודת הדיווח שבפרק 8.</p>
+<div class="tw"><table>
+<thead><tr><th>יומן</th><th>מכיל</th><th>איפה</th></tr></thead><tbody>
+<tr><td>יומן ביקורת</td><td>מי עשה מה, לאיזו רשומה, ומתי</td><td>מסד הנתונים; נצפה בקונסולה</td></tr>
+<tr><td>יומן יציאה</td><td>כל בקשת AI: מתי, איזה שירות, כמה ערכים הוחלפו, ומה התוצאה</td><td>מסד הנתונים</td></tr>
+<tr><td>יומני קונטיינרים</td><td>פירוט תפעולי</td><td><code>docker compose logs</code></td></tr>
+<tr><td>היסטוריית הרצות שכר</td><td>כל הרצה, שלביה ותוצאתה</td><td>מסד הנתונים; נצפה בקונסולה</td></tr>
+</tbody></table></div>
+<p>יומן היציאה הוא זה שכדאי להראות למבקר: זו הרשומה שמאפשרת לכם לענות על השאלה
+"מה המערכת הזו שלחה החוצה אי פעם" בלי להסתמך על המילה שלנו.</p>
+<div class="code"><button class="copy" type="button">העתק</button><pre>./install.sh logs               <span class="c"># מעקב אחרי הכול</span>
+./install.sh logs gateway       <span class="c"># רק התהליך שיכול לצאת החוצה</span></pre></div>
+<p>סבב יומני הקונטיינרים נקבע בתצורת מנוע ה-Docker שלכם. אם יש לכם חובת שמירה,
+הגדירו אותה שם — אנחנו לא דורסים אותה.</p>
+</section><section class="sec" id="connector-he"><span class="sec-n">12</span><h2>המחבר למערכת השכר</h2>
+<p>לא חובה. המחבר מפעיל את תוכנת השכר שלכם דרך RDP על מכונת Windows ברשת שלכם.
+התעבורה הזו לא יוצאת מהרשת הפנימית.</p>
+<div class="code"><button class="copy" type="button">העתק</button><pre>RDP_HOST=10.0.0.20      <span class="c"># מכונת ה-Windows</span>
+RDP_USER=...
+RDP_PASS=...
 
-  <section class="step">
-    <div class="step-n">02</div>
-    <div class="step-body">
-      <h2>התקנה</h2>
-      <div class="code"><button class="copy" type="button">העתק</button><pre>./install.sh install</pre></div>
-      <p>ההתקנה מבקשת כתובת דוא״ל וסיסמה למנהל הראשון, ואז מדפיסה את שלוש הכתובות לפתיחה. אפשר
-        להריץ שוב בבטחה — היא מתקנת התקנה שלא הושלמה במקום להתחיל שנייה.</p>
-      <div class="note">
-        <p class="note-h">ההתקנה עולה ריקה</p>
-        <p>בלי לקוחות, בלי עובדים, בלי תלושים. הרשומות שלכם נכנסות דרך תהליך הקליטה והסנכרון
-          ממערכת השכר. התקנה שהייתה מגיעה מלאה מראש הייתה משאירה לכם שורות שצריך לזהות ולמחוק לפני
-          שאפשר לסמוך על משהו שרואים במסך.</p>
-      </div>
-    </div>
-  </section>
-
-  <section class="step">
-    <div class="step-n">03</div>
-    <div class="step-body">
-      <h2>גיבוי קובץ המפתחות</h2>
-      <p>ההתקנה כותבת קובץ אחד, <code>.env</code>, שמחזיק את הסודות של ההתקנה הזו.</p>
-      <div class="warn">
-        <p class="warn-h">לעשות את זה לפני שממשיכים</p>
-        <p>שניים מהמפתחות בקובץ מצפינים נתונים במנוחה: אחד מצפין כל מסמך של עובד, והשני הוא מה
-          שמאפשר לקרוא מספר תעודת זהות. <strong>אם הקובץ אובד, אי אפשר לשחזר את הנתונים</strong> —
-          לא אנחנו ולא אף אחד. זה התכנון, וזה בלתי הפיך. העתיקו אותו למקום שאינו המכונה הזו.</p>
-      </div>
-    </div>
-  </section>
-
-  <section class="step">
-    <div class="step-n">04</div>
-    <div class="step-body">
-      <h2>פתיחה, ואישור התעודה</h2>
-      <div class="tw">
-        <table>
-          <thead><tr><th>&nbsp;</th><th>כתובת</th><th>מי משתמש</th></tr></thead>
-          <tbody>
-            <tr><td>קונסולה</td><td><code>https://&lt;server&gt;:4201</code></td><td>לשכת השכר</td></tr>
-            <tr><td>ניהול</td><td><code>https://&lt;server&gt;:4301</code></td><td>הגדרות, משתמשים, מחברים</td></tr>
-            <tr><td>פורטל</td><td><code>https://&lt;server&gt;:4401</code></td><td>עובדים</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <p>בכניסה הראשונה הדפדפן יזהיר שהתעודה אינה מהימנה. היא הונפקה על ידי רשות אישורים קטנה
-        שרצה בתוך ההתקנה שלכם, מפני שרשות ציבורית כמו Let's Encrypt לא יכולה להנפיק לשם ברשת
-        פרטית — היא חייבת להגיע לשרת מהאינטרנט, וזה בדיוק מה שההתקנה הזו נמנעת ממנו.</p>
-      <p>מתקנים פעם אחת, בכל מחשב. ייצוא אישור השורש:</p>
-      <div class="code"><button class="copy" type="button">העתק</button><pre>docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt .</pre></div>
-      <p>ואז התקנה שלו כרשות שורש מהימנה:</p>
-      <ul>
-        <li><strong>Windows</strong> — לחיצה כפולה על <code>root.crt</code> ← התקן אישור ← מחשב
-          מקומי ← מקם את כל האישורים בחנות הבאה ← <em>רשויות אישורים מהימנות</em>. אפשר להפיץ לכל
-          המחשבים בבת אחת דרך Group Policy.</li>
-        <li><strong>macOS</strong> — פתיחה ב-Keychain Access ← System ← לסמן <em>Always Trust</em>.</li>
-        <li><strong>לינוקס</strong> — להעתיק ל-<code>/usr/local/share/ca-certificates/</code>
-          ולהריץ <code>sudo update-ca-certificates</code>.</li>
-        <li><strong>iOS / Android</strong> — לשלוח את הקובץ במייל למכשיר ולהתקין כפרופיל.</li>
-      </ul>
-      <div class="note">
-        <p class="note-h">למה HTTP רגיל אינו אפשרות</p>
-        <p>האפליקציות מסמנות את עוגיית ההתחברות כ-<code>Secure</code>, ודפדפנים משליכים עוגייה כזו
-          שהגיעה דרך <code>http://</code>. מעל HTTP דף ההתחברות יקבל את הסיסמה, יעביר אתכם, ויחזיר
-          אתכם לדף ההתחברות — לנצח, בלי שגיאה בשום מקום.</p>
-      </div>
-      <p>אם לשרת יש שם מתחם ציבורי, הגדירו אותו ב-<code>SITE_ADDRESS</code> ובחרו
-        <code>CADDYFILE=Caddyfile.public</code> בקובץ <code>.env</code>; אז תונפק תעודה רגילה
-        אוטומטית, ופורט 80 חייב להיות נגיש לבדיקה.</p>
-    </div>
-  </section>
-
-  <section class="step">
-    <div class="step-n">05</div>
-    <div class="step-body">
-      <h2>חיבור מיכפל <span style="color:var(--ink-faint);font-weight:400">— לא חובה</span></h2>
-      <p>המחבר מפעיל את מיכפל דרך RDP על מכונת Windows ברשת שלכם. בקובץ <code>.env</code>, הגדירו
-        את <code>RDP_HOST</code> לכתובת של אותה מכונה ואת <code>RDP_USER</code> /
-        <code>RDP_PASS</code> לחשבון שיכול להתחבר אליה, ואז:</p>
-      <div class="code"><button class="copy" type="button">העתק</button><pre>docker compose --profile michpal up -d</pre></div>
-      <p>הרצה אחת בכל רגע, במכוון: מכונת Windows נותנת סשן אינטראקטיבי אחד למשתמש, ושתי אוטומציות
-        שחולקות שולחן עבודה אחד מפריעות זו לזו באופן שיקר לתקן.</p>
-      <div class="warn">
-        <p class="warn-h">לתאם מראש פגישת כיול</p>
-        <p>האוטומציה מזהה מסכים לפי הפיקסלים שלהם, והיא מכוילת מול התקנת מיכפל שלנו. גרסה אחרת,
-          רזולוציה אחרת או ספר חברות אחר עשויים לדרוש כיול מחדש. עדיף לתאם איתנו מראש ולא לגלות
-          את זה באמצע הרצת שכר.</p>
-      </div>
-    </div>
-  </section>
-
-  <section class="plain">
-    <h2>עדכונים</h2>
-    <p>ההתקנה בודקת אם יצאה גרסה חדשה <strong>כל עשר דקות</strong> ומחילה אותה בעצמה. אין מה
-      להריץ.</p>
-    <p>היא עוקבת אחרי ערוץ <code>stable</code> — הגרסה שאישרנו, ולא מה שנבנה לאחרונה — כך שעדכון
-      קורה רק כשהחלטנו שכן. מה שמופעל מחדש מוגדר בכוונה בצמצום:</p>
-    <div class="tw">
-      <table>
-        <thead><tr><th>&nbsp;</th><th>מתעדכן לבד</th></tr></thead>
-        <tbody>
-          <tr><td>האפליקציות</td><td><strong>כן</strong> — כמה שניות לכל אחת, אחת בכל פעם</td></tr>
-          <tr><td>מסד הנתונים</td><td><strong>אף פעם.</strong> שדרוג מסד נתונים הוא מיגרציית נתונים, ולא משהו שעושים ללא השגחה בשלוש לפנות בוקר.</td></tr>
-          <tr><td>המחבר למיכפל</td><td><strong>לא</strong>, כברירת מחדל — הוא מריץ סשן אחד בכל רגע ושומר את מצב ההרצה בזיכרון, כך שהפעלה מחדש באמצע הרצה הייתה מסיימת את הרצת השכר בלי לדווח.</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p>כדי לאשר כל עדכון בעצמכם, הגדירו אחד מאלה בקובץ <code>.env</code> והפעילו מחדש. בשני
-      המקרים <code>./install.sh update</code> מחיל את הגרסה הנוכחית מיד.</p>
-    <div class="code"><button class="copy" type="button">העתק</button><pre>AUTO_UPDATE_MONITOR_ONLY=true   <span class="c"># מדווח מה היה עושה, לא משנה כלום</span>
-BUNDLE_VERSION=1.1.3            <span class="c"># נעילה לגרסה; עדכונים לא ירוצו</span></pre></div>
-    <div class="warn">
-      <p class="warn-h">מה מנגנון העדכון מורשה לעשות</p>
-      <p>הוא צריך גישה לשירות ה-Docker במכונה, מה שהופך אותו בפועל למורשה כמו חשבון המנהל. זה
-        המחיר של עדכוני אבטחה ללא השגחה על שרת שאף אחד לא מתחבר אליו. אם מדיניות האבטחה שלכם לא
-        מאפשרת זאת, השתמשו ב-<code>AUTO_UPDATE_MONITOR_ONLY=true</code> ועדכנו ידנית.</p>
-    </div>
-  </section>
-
-  <section class="plain">
-    <h2>תפעול שוטף</h2>
-    <div class="code"><button class="copy" type="button">העתק</button><pre>./install.sh status     <span class="c"># מה רץ, ומה הכתובות</span>
-./install.sh logs       <span class="c"># מעקב אחרי הכל; אפשר להוסיף שם שירות</span>
-./install.sh backup     <span class="c"># מסד נתונים + מסמכים, אל ./backups/&lt;timestamp&gt;/</span>
-./install.sh update     <span class="c"># משיכת גרסה חדשה והפעלה מחדש</span>
-./install.sh stop       <span class="c"># עצירה; הנתונים לא נוגעים</span></pre></div>
-    <h3>גיבויים</h3>
-    <p><code>backup</code> כותב שני קבצים: דאמפ של מסד הנתונים וארכיון של המסמכים השמורים. צריך את
-      שניהם — שחזור של מסד הנתונים בלי המסמכים נותן התקנה שבה כל העובדים קיימים ואף קובץ שלהם לא
-      נפתח.</p>
-    <p>אף אחד מהם אינו קריא בלי <code>.env</code>. שמרו את העותק ההוא במקום אחר: ארכיון שיושב ליד
-      המפתח שמצפין אותו הוא גניבה אחת, לא שתיים.</p>
-  </section>
-
-  <section class="plain">
-    <h2>מה יוצא מהרשת שלכם</h2>
-    <p>שלושה דברים, ולא יותר.</p>
-    <ol>
-      <li><strong>בקשות למודל</strong>, דרך השער, כשערכים מזהים מוחלפים בסימנים ומוחזרים בתשובה.
-        מסמכים נקראים <em>על השרת הזה</em> — קובץ PDF הופך לטקסט כאן, ורק הטקסט המוסווה חוצה. מה
-        שסריקה לא מוסרת ל-OCR נדחה ולא מועבר.</li>
-      <li><strong>טלמטריה מצטברת</strong>, אם תפעילו אותה: מונים, משכי זמן, קודי שגיאה ומזהים
-        מגובבים. היא נבדקת מול רשימת היתר בדיוק לפני השליחה — כל דבר שאינו מספר, חותמת זמן, גיבוב
-        או קוד מוכר נדחה, כך שבמבנה אין דרך ששם או הודעת שגיאה שמצטטת מסך יעברו.
-        <code>GET /snapshot</code> בשירות המדדים מראה בדיוק מה היה נשלח. אם משאירים את
-        <code>BETTERSTACK_*</code> ריק, לא מדווח דבר.</li>
-      <li><strong>הורדות תמונות</strong>, בהתקנה או בעדכון.</li>
-    </ol>
-    <p>אין ערוץ גישה מרחוק. אנחנו לא יכולים להיכנס להתקנה הזו; אם תרצו שנסתכל על משהו, אתם שולחים
-      לנו את מה שאתם בוחרים לשלוח.</p>
-  </section>
-
-  <section class="plain">
-    <h2>כשמשהו לא עובד</h2>
-    <div class="tw">
-      <table>
-        <thead><tr><th>התסמין</th><th>איפה לבדוק</th></tr></thead>
-        <tbody>
-          <tr><td>דף ההתחברות חוזר לעצמו</td><td>אתם על <code>http://</code>. ראו שלב 04.</td></tr>
-          <tr><td>״להקצות מחבר״ בפעולת מיכפל</td><td><code>RDP_HOST</code> לא מוגדר, או ש-<code>./install.sh bootstrap</code> לא רץ.</td></tr>
-          <tr><td>הפורטל לא מציג כלום בשום כתובת</td><td><code>SITE_ADDRESS</code> לא תואם לשם שהקלדתם. הריצו <code>./install.sh bootstrap</code> שוב.</td></tr>
-          <tr><td>המודל דוחה מסמך</td><td><code>GATEWAY_ATTACHMENTS=block</code> וה-OCR לא קרא את הסריקה. סריקה ברורה יותר, או שינוי מודע ל-<code>allow</code>.</td></tr>
-          <tr><td>תזכורות לא נשלחות</td><td><code>./install.sh logs scheduler</code> — הוא מחזיר 503 כשמשימה הפסיקה להצליח.</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <footer>
-      <p>תמיכה: <strong>support@dekel.finance</strong>. צרפו את הפלט של
-        <code>./install.sh status</code> ואת מזהה ההתקנה מתוך <code>.env</code>
-        (<code>METRICS_INSTALL_ID</code>).</p>
-    </footer>
-  </section>
-</div>
-
+docker compose --profile michpal up -d</pre></div>
+<p>הרצה אחת בכל רגע, במכוון: מכונת Windows נותנת סשן אינטראקטיבי אחד למשתמש, ושתי
+אוטומציות שחולקות שולחן עבודה אחד מפריעות זו לזו באופן שיקר לתקן. תכננו מכונה
+ייעודית או חשבון ייעודי.</p>
+<div class="warn"><p class="co-h">תאמו פגישת כיול לפני שנשענים על זה</p>
+<p>האוטומציה מזהה מסכים לפי הפיקסלים שלהם, והיא מכוילת מול ההתקנה שלנו של תוכנת
+השכר. גרסה אחרת, רזולוציה אחרת או ספר חברות אחר עשויים לדרוש כיול מחדש.
+<strong>זהו הנעלם הגדול ביותר בהטמעה מקומית</strong>, ואנחנו מעדיפים לקבוע לו
+תאריך מראש ולא לגלות אותו באמצע סגירת החודש שלכם.</p></div>
+</section><section class="sec" id="ops-he"><span class="sec-n">13</span><h2>מדריך תפעול</h2>
+<div class="code"><button class="copy" type="button">העתק</button><pre>./install.sh status     <span class="c"># מה רץ, באיזו גרסה, ומה הכתובות</span>
+./install.sh logs       <span class="c"># מעקב אחרי הכול; אפשר להוסיף שם שירות</span>
+./install.sh backup     <span class="c"># מסד נתונים + מסמכים</span>
+./install.sh update     <span class="c"># החלת הגרסה הנוכחית עכשיו</span>
+./install.sh stop       <span class="c"># עצירה; הנתונים שלכם לא נוגעים</span></pre></div>
+<h4>בדיקות שגרתיות</h4>
+<div class="tw"><table>
+<thead><tr><th>מתי</th><th>מה בודקים</th></tr></thead><tbody>
+<tr><td>יומי, אוטומטי</td><td>הגיבוי הושלם והועתק אל מחוץ למכונה</td></tr>
+<tr><td>חודשי</td><td>הגרסה הרצה השתנתה אחרי שיצאה גרסה (פרק 9)</td></tr>
+<tr><td>חודשי</td><td>מקום פנוי מעל 20 ג׳יגה</td></tr>
+<tr><td>רבעוני</td><td>שחזור על מכונה חלופית עדיין עובד</td></tr>
+<tr><td>בשינוי כוח אדם</td><td>חשבונות הושבתו; החזקת קובץ המפתחות עדיין נכונה (פרקים 5, 7)</td></tr>
+</tbody></table></div>
+<h4>הסרה מלאה</h4>
+<div class="code"><button class="copy" type="button">העתק</button><pre>docker compose down -v   <span class="c"># עוצר הכול ומוחק את נפחי הנתונים</span></pre></div>
+<p>שום דבר משלכם לא קיים במקום אחר, אז זה כל הסיפור. אם הגדרתם טלמטריה, הודיעו
+לנו ונמחק את מה שדווח.</p>
+</section><section class="sec" id="trouble-he"><span class="sec-n">14</span><h2>איתור תקלות</h2>
+<div class="tw"><table>
+<thead><tr><th>תסמין</th><th>סיבה ופעולה</th></tr></thead><tbody>
+<tr><td>דף ההתחברות חוזר לעצמו, בלי שגיאה בשום מקום</td><td>אתם על <code>http://</code>. ראו פרק 6 — הדפדפן משליך עוגיית <code>Secure</code></td></tr>
+<tr><td>הדפדפן מזהיר שהתעודה אינה מהימנה</td><td>אישור השורש עדיין לא הופץ. פרק 6</td></tr>
+<tr><td>״להקצות מחבר״ בפעולת שכר</td><td><code>RDP_HOST</code> לא מוגדר, או שפרופיל המחבר אינו רץ. פרק 12</td></tr>
+<tr><td>הפורטל לא מציג כלום בשום כתובת</td><td><code>SITE_ADDRESS</code> לא תואם לשם שהוקלד. הריצו שוב <code>./install.sh bootstrap</code></td></tr>
+<tr><td>מסמך נדחה בשלב ה-AI</td><td>צירופי קבצים חסומים כברירת מחדל וה-OCR לא קרא את הסריקה. סריקה ברורה יותר, או שינוי מודע של ההגדרה. פרק 8</td></tr>
+<tr><td>תזכורות לא נשלחות</td><td><code>./install.sh logs scheduler</code> — הוא מחזיר 503 כשמשימה הפסיקה להצליח</td></tr>
+<tr><td>הגרסה לא משתנה אחרי שיצאה גרסה</td><td>מנגנון העדכון לא מגיע למאגר, או שהוא במצב ניטור בלבד. פרק 9 — בדקו את היומנים, לא את היעדר השגיאות</td></tr>
+</tbody></table></div>
+</section><section class="sec" id="limits-he"><span class="sec-n">15</span><h2>מגבלות, בלשון ברורה</h2>
+<p>הבטחת התקנה מקומית עם פער שלא נאמר גרועה מהבטחה קטנה יותר. אלה הדברים
+שההטמעה הזו אינה עושה, או שאינה עושה עדיין היטב.</p>
+<ul>
+<li><strong>הכיול מול תוכנת השכר שלכם אינו מוכח עד שנבצע אותו.</strong>
+האוטומציה מזהה מסכים לפי הפיקסלים שלהם, שנמדדו מול ההתקנה שלנו. שלכם הוא נעלם
+שלא היה לנו. פרק 12.</li>
+<li><strong>דוא״ל נכנס אינו מגיע להתקנה הזו.</strong> הטמעה בלי מסלול נכנס אינה
+יכולה לקבל webhook. יכולות שמתחילות בכך שלקוח שולח לכם מייל אינן זמינות מקומית
+היום; אנחנו בונים עבורן מסלול יוצא, ולא נעמיד פנים שהן קיימות בינתיים.</li>
+<li><strong>איכות ה-OCR על מסמכים סרוקים אמיתיים לא נמדדה.</strong> היא מאומתת
+מול המרות נקיות. סריקה מצולמת, נטויה או בניגודיות נמוכה היא בעיה אחרת, ומה
+שה-OCR לא מצליח לקרוא נדחה ולא מנוחש.</li>
+<li><strong>התעודה ברשת פרטית מונפקת עצמית.</strong> הנפקה מה-PKI שלכם אינה
+ממומשת; מה שנשלח הוא רשות פנימית שאתם צריכים להפיץ. פרק 6.</li>
+<li><strong>אין ערוץ תמיכה מרוחק.</strong> זה במכוון, וזה חותך לשני הכיוונים:
+האבחון תלוי במה שתשלחו לנו.</li>
+<li><strong>התקנה מנותקת לחלוטין אינה נתמכת.</strong> מאגר התמונות חייב להיות
+נגיש לפחות בזמן ההתקנה והעדכון.</li>
+</ul>
+</section><section class="sec" id="support-he"><span class="sec-n">16</span><h2>תמיכה והסלמה</h2>
+<p>כתבו אל <strong>support@dekel.finance</strong>. צרפו את הפלט של
+<code>./install.sh status</code> ואת מזהה ההתקנה מתוך <code>.env</code>
+(<code>METRICS_INSTALL_ID</code>). בטוח לשלוח את שניהם: אף אחד מהם אינו מכיל
+נתוני שכר או חומר מפתחות.</p>
+<div class="tw"><table>
+<thead><tr><th>מצב</th><th>מה נחוץ לנו מכם</th></tr></thead><tbody>
+<tr><td>הרצת שכר נכשלה</td><td>מזהה ההרצה מהקונסולה, והשעה</td></tr>
+<tr><td>מסכי תוכנת השכר השתנו</td><td>צילום מסך של המסך שבו נעצרה — <strong>עם הסתרת נתוני הלקוח</strong></td></tr>
+<tr><td>עדכון לא הוחל</td><td><code>./install.sh status</code> והיומן של מנגנון העדכון (פרק 9)</td></tr>
+<tr><td>חשד לבעיית אבטחה</td><td>כתבו לאותה כתובת עם <code>SECURITY</code> בשורת הנושא. אל תצרפו פרט גישה פעיל</td></tr>
+</tbody></table></div>
+<p>מכיוון שאין לנו גישה להתקנה שלכם, כל מה שנוכל לומר מגיע ממה שתשלחו. צילום מסך
+עם שם הלקוח מושחר בדרך כלל מספיק, ותמיד עדיף על גישה שאנחנו מעדיפים שלא תהיה
+לנו.</p>
+</section><footer><p>מסמך לגרסת חבילה 1.1.3. עודכן לאחרונה ב-23 באוגוסט 2026. נכתב ומתוחזק על ידי דקל.</p></footer></div>
 </main>
-
 <script>
   (function () {
-    var en = document.getElementById('lang-en');
-    var he = document.getElementById('lang-he');
-    var bEn = document.getElementById('btn-en');
-    var bHe = document.getElementById('btn-he');
-
+    var en = document.getElementById('lang-en'), he = document.getElementById('lang-he');
+    var bEn = document.getElementById('btn-en'), bHe = document.getElementById('btn-he');
     function set(lang) {
       var hebrew = lang === 'he';
-      // The whole document flips, not just the text: tables, list markers,
-      // callout rails and the numbered step column all read from `dir`.
       document.documentElement.lang = hebrew ? 'he' : 'en';
       document.documentElement.dir = hebrew ? 'rtl' : 'ltr';
-      en.hidden = hebrew;
-      he.hidden = !hebrew;
+      en.hidden = hebrew; he.hidden = !hebrew;
       bEn.setAttribute('aria-pressed', String(!hebrew));
       bHe.setAttribute('aria-pressed', String(hebrew));
       try { localStorage.setItem('guide-lang', lang); } catch (e) {}
     }
-
     bEn.addEventListener('click', function () { set('en'); });
     bHe.addEventListener('click', function () { set('he'); });
-
     var saved = null;
     try { saved = localStorage.getItem('guide-lang'); } catch (e) {}
     set(saved || (navigator.language && navigator.language.indexOf('he') === 0 ? 'he' : 'en'));
 
-    // Copy buttons. The label says what happened, then goes back to the verb.
     document.querySelectorAll('.copy').forEach(function (btn) {
       var original = btn.textContent;
       btn.addEventListener('click', function () {
@@ -870,6 +928,5 @@ BUNDLE_VERSION=1.1.3            <span class="c"># נעילה לגרסה; עדכ�
     });
   })();
 </script>
-
 </body>
 </html>

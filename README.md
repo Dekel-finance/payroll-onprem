@@ -25,9 +25,19 @@ policy, by construction: a call that skipped the gateway would fail to resolve.
 
 You also need:
 
-- **Outbound HTTPS** to two hosts, and no inbound access from the internet at
-  all: `dekelmichpalil.azurecr.io` (to download the software) and
-  `api.anthropic.com` (the model vendor, reached only by the gateway).
+- **No inbound access from the internet at all**, and **outbound HTTPS to at
+  most four destinations** — put these in your egress allow-list and deny the
+  rest:
+
+  | Destination | Why | Required |
+  |---|---|---|
+  | `dekelmichpalil.azurecr.io` | software images | **yes** |
+  | `api.anthropic.com` | AI vendor, reached only by the gateway | only with AI features |
+  | `api.interfaze.ai` | **second AI vendor**, reads documents | only with document extraction |
+  | your reporting endpoint | aggregate telemetry | no — blank sends nothing |
+
+  There are **two AI vendors, not one**. An allow-list or a processing register
+  that names only the well-known one is incomplete.
 - **A model vendor key**, or ask us to supply one.
 - *Optional:* the **Windows machine running מיכפל**, reachable from this server
   on port 3389. Without it everything else still works; the connector simply
