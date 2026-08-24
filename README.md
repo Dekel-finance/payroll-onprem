@@ -144,7 +144,37 @@ A single file, `.env`, holding this install's secrets.
 
 | | Address | Who uses it |
 |---|---|---|
-| Console | `https://<your-server>:4201` | the payroll office |
+| Console | `https://<your-server>` | the payroll office |
+
+### Opening the port
+
+The bundle publishes **two** ports and nothing else:
+
+| Port | What for | Who needs to reach it |
+|---|---|---|
+| **443** | the console | your staff, from inside your network |
+| **80** | the certificate renewal challenge | only if `<your-server>` is a public name |
+
+Nothing needs to be reachable **from the internet**. If the server has a public
+name and you want a normally-trusted certificate, port 80 has to be open for
+Let's Encrypt to answer a challenge on it — otherwise leave it closed and the
+install issues its own certificate instead.
+
+On a stock Ubuntu server:
+
+```bash
+sudo ufw allow 443/tcp comment 'payroll console'
+sudo ufw allow 80/tcp  comment 'certificate renewal — only for a public hostname'
+sudo ufw status
+```
+
+The admin port is **not** in that list on purpose — it is bound to `127.0.0.1`,
+so no browser on your network can open it and no firewall rule will change
+that. See "The back office is not published" below.
+
+If staff get a connection timeout rather than a certificate warning, the port
+is closed somewhere between them and this machine — check the host firewall
+first, then anything between (a hypervisor, a cloud security group, a VLAN ACL).
 
 ### The certificate warning, and why it is there
 
