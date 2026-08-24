@@ -256,10 +256,56 @@ cd payroll-onprem
 outbound destinations resolve, and that the ports are free. Anything marked
 <code>!</code> must be fixed first.</p>
 <h4>Step 2 — install</h4>
-<div class="code"><button class="copy" type="button">Copy</button><pre>./install.sh install</pre></div>
+<p>We send you two values before this step: an <strong>install id</strong> and an
+<strong>install token</strong>. They are not optional, and they are the only
+values we send you — the installer generates everything else itself.</p>
+<div class="code"><button class="copy" type="button">Copy</button><pre>INSTALL_ID=&lt;the id we sent&gt; INSTALL_TOKEN=&lt;the token we sent&gt; ./install.sh install</pre></div>
 <p>It asks for the first administrator's email and password, then prints the
 addresses to open. Running it again is safe: it repairs an incomplete install
 rather than starting a second one.</p>
+<div class="note"><p class="co-h">One token, two jobs</p>
+<p>That token is what lets this installation <strong>report its health to us</strong>
+and <strong>collect your inbound email</strong>. Without it the software runs
+normally, reports nothing and receives no mail — silently. That silence is why
+the installer now tests the token instead of trusting it.</p></div>
+<p>Its final step performs that test against us and prints one of:</p>
+<table><thead><tr><th>What it prints</th><th>What it means</th></tr></thead><tbody>
+<tr><td class="mono">verified</td><td>health reporting and inbound email are live</td></tr>
+<tr><td class="mono">REFUSED (401)</td><td>the id and the token are not a matching pair — check both against what we sent</td></tr>
+<tr><td class="mono">SUSPENDED (403)</td><td>deliberate on our side, not a misconfiguration — contact us</td></tr>
+<tr><td class="mono">could not reach</td><td>this host cannot make outbound HTTPS. Open it and re-run — the command is safe to repeat</td></tr>
+</tbody></table>
+<p><strong>None of these stop the installation.</strong> Your payroll does not
+depend on our permission, and a server that refused to finish because a firewall
+rule was late would be a bureau unable to pay salaries.</p>
+
+<h4>Step 2b — or hand it to a coding agent</h4>
+<p>If your team uses Claude Code, Cursor or similar, this is one paste. Fill in
+the four values first; the agent cannot invent them and should not try.</p>
+<div class="code"><button class="copy" type="button">Copy</button><pre>Install the Dekel payroll on-prem bundle on this machine, from this repo.
+
+Values I am giving you (do not invent or substitute these):
+  SITE_ADDRESS  = &lt;the hostname staff will type, e.g. payroll.acme.local&gt;
+  INSTALL_ID    = &lt;the id Dekel sent us&gt;
+  INSTALL_TOKEN = &lt;the token Dekel sent us&gt;
+  AGENCY_NAME   = &lt;our bureau's name, as it should appear in the app&gt;
+
+Do this, in order, and stop and tell me if a step does not do what it says:
+
+1. Run ./install.sh check and report anything it says is missing.
+2. Run the install with those four values set.
+   It generates every secret into .env and must run ONCE. NATIONAL_ID_KEYS in
+   that file seals every identity number we will ever store — if it is
+   regenerated later, all of them become unreadable.
+3. Leave every other value at its default. The control plane and the AI broker
+   addresses are built into the image; a blank means "use the default", not
+   "disabled".
+4. Read the installer's last lines back to me: verified / REFUSED / SUSPENDED /
+   could not reach. A failure does not stop the install, but tell me which.
+5. Run ./install.sh status and confirm every service is healthy.
+
+Then give me the URL to sign in at, and remind me to copy .env somewhere off
+this machine. Do not commit .env anywhere. Do not load any demo data.</pre></div>
 <div class="note"><p class="co-h">The system starts empty, deliberately</p>
 <p>No clients, no employees, no payslips. Your records arrive through onboarding
 and the sync from your payroll system. An installation delivered pre-filled
@@ -327,6 +373,25 @@ refuse outright.</p>
 certificate is then obtained and renewed automatically, and port <code>80</code>
 must be reachable for the issuing check only. This does not publish the
 applications — it publishes a challenge response.</p>
+<h4>Opening the port</h4>
+<p>The bundle publishes <strong>two</strong> ports and nothing else.</p>
+<table><thead><tr><th>Port</th><th>What for</th><th>Who must reach it</th></tr></thead><tbody>
+<tr><td class="mono">443</td><td>the console</td><td>your staff, from inside your network</td></tr>
+<tr><td class="mono">80</td><td>certificate renewal challenge</td><td>only if your hostname is public</td></tr>
+</tbody></table>
+<p>Nothing needs to be reachable <strong>from the internet</strong>. Port 80 is
+required only when the server has a public name and you want a normally-trusted
+certificate; otherwise leave it closed and the installation issues its own.</p>
+<div class="code"><button class="copy" type="button">Copy</button><pre>sudo ufw allow 443/tcp comment 'payroll console'
+sudo ufw allow 80/tcp  comment 'certificate renewal — public hostname only'
+sudo ufw status</pre></div>
+<p>The back-office port is deliberately absent from that list: it is bound to
+<code class="mono">127.0.0.1</code>, so no browser on your network can open it
+and no firewall rule will change that. See §7.</p>
+<p>If staff get a <em>connection timeout</em> rather than a certificate warning,
+the port is closed somewhere between them and this machine — check the host
+firewall first, then anything in between: a hypervisor, a cloud security group,
+a VLAN ACL.</p>
 </section><section class="sec" id="access-en"><span class="sec-n">07</span><h2>Identity, access, and what we cannot do</h2>
 <h4>Who can sign in</h4>
 <p>Only accounts your administrator creates in this installation. Passwords are
@@ -629,7 +694,24 @@ cd payroll-onprem
 <p>היא בודקת גרסאות Docker ו-Compose, ליבות, זיכרון, מקום פנוי, שהיעדים היוצאים
 נפתרים, ושהפורטים פנויים. כל מה שמסומן ב-<code>!</code> חייב תיקון קודם.</p>
 <h4>שלב 2 — התקנה</h4>
-<div class="code"><button class="copy" type="button">העתק</button><pre>./install.sh install</pre></div>
+<p>לפני השלב הזה אנחנו שולחים אליכם שני ערכים: <strong>מזהה התקנה</strong>
+ו<strong>טוקן התקנה</strong>. הם חובה, והם היחידים שאנחנו שולחים — כל השאר נוצר
+על ידי המתקין עצמו.</p>
+<div class="code"><button class="copy" type="button">העתק</button><pre>INSTALL_ID=&lt;המזהה ששלחנו&gt; INSTALL_TOKEN=&lt;הטוקן ששלחנו&gt; ./install.sh install</pre></div>
+<div class="note"><p class="co-h">טוקן אחד, שני תפקידים</p>
+<p>הטוקן הזה הוא מה שמאפשר להתקנה <strong>לדווח לנו על תקינותה</strong> וגם
+<strong>למשוך את הדואר הנכנס שלכם</strong>. בלעדיו התוכנה עובדת, לא מדווחת דבר
+ולא מקבלת דואר — בשקט. השקט הזה הוא הסיבה שהמתקין בודק את הטוקן במקום להניח
+שהוא נכון.</p></div>
+<p>השלב האחרון שלו מבצע את הבדיקה מול השרתים שלנו ומדפיס אחת מהאפשרויות:</p>
+<table><thead><tr><th>מה מודפס</th><th>המשמעות</th></tr></thead><tbody>
+<tr><td class="mono">verified</td><td>הדיווח והדואר הנכנס פעילים</td></tr>
+<tr><td class="mono">REFUSED (401)</td><td>המזהה והטוקן אינם זוג תואם — בדקו את שניהם מול מה ששלחנו</td></tr>
+<tr><td class="mono">SUSPENDED (403)</td><td>החלטה שלנו, לא תקלת הגדרה — פנו אלינו</td></tr>
+<tr><td class="mono">could not reach</td><td>אין מהמכונה הזו יציאת HTTPS. פתחו והריצו שוב — הפקודה בטוחה לחזרה</td></tr>
+</tbody></table>
+<p><strong>אף אחת מהן אינה עוצרת את ההתקנה.</strong> השכר שלכם אינו תלוי באישור
+שלנו, ושרת שסירב לסיים בגלל כלל חומת אש שאיחר הוא לשכה שאינה יכולה לשלם משכורות.</p>
 <p>ההתקנה מבקשת דוא״ל וסיסמה למנהל הראשון, ואז מדפיסה את הכתובות לפתיחה. אפשר
 להריץ שוב בבטחה: היא מתקנת התקנה שלא הושלמה במקום להתחיל שנייה.</p>
 <div class="note"><p class="co-h">המערכת עולה ריקה, במכוון</p>
@@ -690,6 +772,22 @@ cp .env /secure/offline/location/payroll-env-$(date +%F)</pre></div>
 בקובץ <code>.env</code>. אז תונפק ותחודש תעודה רגילה אוטומטית, ופורט <code>80</code>
 צריך להיות נגיש לבדיקת ההנפקה בלבד. זה לא מפרסם את האפליקציות — זה מפרסם תשובה
 לאתגר.</p>
+<h4>פתיחת הפורט</h4>
+<p>החבילה מפרסמת <strong>שני</strong> פורטים בלבד.</p>
+<table><thead><tr><th>פורט</th><th>למה</th><th>מי צריך להגיע</th></tr></thead><tbody>
+<tr><td class="mono">443</td><td>הקונסולה</td><td>הצוות שלכם, מתוך הרשת</td></tr>
+<tr><td class="mono">80</td><td>אתגר חידוש תעודה</td><td>רק אם שם המארח שלכם ציבורי</td></tr>
+</tbody></table>
+<p>שום דבר אינו צריך להיות נגיש <strong>מהאינטרנט</strong>. פורט 80 נדרש רק כאשר
+לשרת יש שם ציבורי ואתם רוצים תעודה מוכרת; אחרת השאירו אותו סגור וההתקנה תנפיק
+תעודה משלה.</p>
+<div class="code"><button class="copy" type="button">העתק</button><pre>sudo ufw allow 443/tcp
+sudo ufw allow 80/tcp
+sudo ufw status</pre></div>
+<p>פורט הניהול נעדר מהרשימה במכוון: הוא מוגבל ל־<code class="mono">127.0.0.1</code>,
+ולכן שום דפדפן ברשת שלכם אינו יכול לפתוח אותו ושום כלל חומת אש לא ישנה זאת.</p>
+<p>אם הצוות מקבל <em>פסק זמן בחיבור</em> ולא אזהרת תעודה — הפורט חסום איפשהו
+ביניכם לבין המכונה. בדקו קודם את חומת האש של המארח, ואז כל מה שביניהם.</p>
 </section><section class="sec" id="access-he"><span class="sec-n">07</span><h2>זהויות, גישה, ומה שאנחנו לא יכולים לעשות</h2>
 <h4>מי יכול להתחבר</h4>
 <p>רק חשבונות שהמנהל שלכם יוצר בהתקנה הזו. סיסמאות נשמרות מגובבות בפונקציה עתירת
