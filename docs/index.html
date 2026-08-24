@@ -539,7 +539,7 @@ date for it in advance than discover it during your month-end.</p></div>
 ./install.sh logs       <span class="c"># follow everything; add a service name for one</span>
 ./install.sh backup     <span class="c"># database + documents</span>
 ./install.sh update     <span class="c"># apply the current release now</span>
-./install.sh stop       <span class="c"># stop; your data is untouched</span></pre></div>
+./install.sh stop       <span class="c"># stop; the data is untouched</span></pre></div>
 <h4>Routine checks</h4>
 <div class="tw"><table>
 <thead><tr><th>When</th><th>Check</th></tr></thead><tbody>
@@ -602,7 +602,7 @@ payroll data or key material.</p>
 comes from what you send. A screenshot with the client's name blacked out is
 usually enough, and is always better than access we would rather not have.</p>
 </section><footer><p>Document for bundle version 1.1.6. Last updated 24 August 2026. Written and maintained by Dekel.</p></footer></div>
-<div id="lang-he" class="wrap" hidden><header class="hero"><p class="eyebrow">מדריך הטמעה</p><h1>הרצת מערכת השכר על התשתית שלכם</h1><p class="lede">מסד הנתונים, הקונסולה, הניהול, פורטל העובדים והמחבר למערכת השכר, על חומרה בשליטתכם.
+<div id="lang-he" class="wrap" hidden><header class="hero"><p class="eyebrow">מדריך הטמעה</p><h1>הרצת מערכת השכר על התשתית שלכם</h1><p class="lede">מסד הנתונים, הקונסולה, הניהול והסוכן האוטומטי, על חומרה בשליטתכם.
    המסמך נכתב עבור מי שצריך לאשר, להתקין ואז להיות אחראי לזה — לא עבור הדגמה.</p></header><nav class="toc" aria-label="תוכן העניינים"><h4>תוכן העניינים</h4><ol><li><a href="#review-he">תקציר לביקורת אבטחה</a></li><li><a href="#arch-he">גבול הרשת</a></li><li><a href="#req-he">דרישות מקדימות</a></li><li><a href="#install-he">התקנה</a></li><li><a href="#keys-he">חומר מפתחות, ומה שאי אפשר לשחזר</a></li><li><a href="#tls-he">TLS ואמון בתעודה</a></li><li><a href="#access-he">זהויות, גישה, ומה שאנחנו לא יכולים לעשות</a></li><li><a href="#egress-he">מה בדיוק יוצא מהרשת שלכם</a></li><li><a href="#updates-he">עדכונים</a></li><li><a href="#backup-he">גיבוי ושחזור</a></li><li><a href="#audit-he">יומנים וביקורת</a></li><li><a href="#connector-he">המחבר למערכת השכר</a></li><li><a href="#ops-he">מדריך תפעול</a></li><li><a href="#trouble-he">איתור תקלות</a></li><li><a href="#limits-he">מגבלות, בלשון ברורה</a></li><li><a href="#support-he">תמיכה והסלמה</a></li></ol></nav><section class="sec" id="review-he"><span class="sec-n">01</span><h2>תקציר לביקורת אבטחה</h2>
 <p>הפרק הזה עונה במקום אחד על השאלות שביקורת אבטחה שואלת ראשונות. כל טענה כאן
 מורחבת בהמשך המסמך, וכל אחת מהן ניתנת לבדיקה על המכונה שלכם ולא רק לאמון בנו.</p>
@@ -630,7 +630,7 @@ Docker המוגדרת <em>internal</em>, כלומר מנוע Docker לא מתק�
     <text class="b-s" x="24" y="30" direction="rtl">הבניין שלכם — בלי מסלול לאינטרנט</text>
     <rect class="b-box" x="30" y="48" width="112" height="38" rx="6"/><text class="b-t" x="52" y="72" direction="rtl">קונסולה</text>
     <rect class="b-box" x="30" y="96" width="112" height="38" rx="6"/><text class="b-t" x="60" y="120" direction="rtl">ניהול</text>
-    <rect class="b-box" x="30" y="144" width="112" height="38" rx="6"/><text class="b-t" x="58" y="168" direction="rtl">פורטל</text>
+    <rect class="b-box" x="30" y="144" width="112" height="38" rx="6"/><text class="b-t" x="58" y="168" direction="rtl">סוכן</text>
     <rect class="b-box" x="30" y="192" width="112" height="38" rx="6"/><text class="b-t" x="48" y="216" direction="rtl">מסד נתונים</text>
     <path class="b-l" d="M142 115 H228" stroke-width="1.5" marker-end="url(#b)"/>
     <rect class="b-gate" x="232" y="86" width="120" height="58" rx="8"/>
@@ -650,7 +650,7 @@ Docker המוגדרת <em>internal</em>, כלומר מנוע Docker לא מתק�
 <div class="tw"><table>
 <thead><tr><th>קונטיינר</th><th>מחזיק נתוני שכר</th><th>יכול להגיע לאינטרנט</th></tr></thead><tbody>
 <tr><td>מסד הנתונים</td><td>כן</td><td>לא</td></tr>
-<tr><td>קונסולה, ניהול, פורטל</td><td>כן</td><td>לא</td></tr>
+<tr><td>קונסולה וניהול</td><td>כן</td><td>לא</td></tr>
 <tr><td>סוכן, מתזמן</td><td>כן</td><td>לא</td></tr>
 <tr><td>שער</td><td>במעבר בלבד</td><td><strong>כן</strong> — ספקי ה-AI, ולא יותר</td></tr>
 <tr><td>טלמטריה</td><td>לא</td><td><strong>כן</strong> — נקודת הדיווח שתגדירו</td></tr>
@@ -658,7 +658,7 @@ Docker המוגדרת <em>internal</em>, כלומר מנוע Docker לא מתק�
 <tr><td>מנגנון העדכון</td><td>לא</td><td><strong>כן</strong> — מאגר התמונות</td></tr>
 </tbody></table></div>
 <p>אפשר לאמת את ההפרדה בעצמכם בכל רגע, בלי עזרה מאיתנו:</p>
-<div class="code"><button class="copy" type="button">העתק</button><pre><span class="c"># אמור להיכשל: לאפליקציות אין מסלול החוצה</span>
+<div class="code"><button class="copy" type="button">העתק</button><pre><span class="c"># should fail: the apps have no route out</span>
 docker compose exec console node -e "fetch('https://example.com').catch(e=>{console.log('no route:',e.message);process.exit(0)}).then(()=>process.exit(1))"</pre></div>
 </section><section class="sec" id="req-he"><span class="sec-n">03</span><h2>דרישות מקדימות</h2>
 <div class="tw"><table>
@@ -694,24 +694,25 @@ cd payroll-onprem
 <p>היא בודקת גרסאות Docker ו-Compose, ליבות, זיכרון, מקום פנוי, שהיעדים היוצאים
 נפתרים, ושהפורטים פנויים. כל מה שמסומן ב-<code>!</code> חייב תיקון קודם.</p>
 <h4>שלב 2 — התקנה</h4>
-<p>לפני השלב הזה אנחנו שולחים אליכם שני ערכים: <strong>מזהה התקנה</strong>
-ו<strong>טוקן התקנה</strong>. הם חובה, והם היחידים שאנחנו שולחים — כל השאר נוצר
-על ידי המתקין עצמו.</p>
-<div class="code"><button class="copy" type="button">העתק</button><pre>INSTALL_ID=&lt;המזהה ששלחנו&gt; INSTALL_TOKEN=&lt;הטוקן ששלחנו&gt; ./install.sh install</pre></div>
-<div class="note"><p class="co-h">טוקן אחד, שני תפקידים</p>
-<p>הטוקן הזה הוא מה שמאפשר להתקנה <strong>לדווח לנו על תקינותה</strong> וגם
-<strong>למשוך את הדואר הנכנס שלכם</strong>. בלעדיו התוכנה עובדת, לא מדווחת דבר
-ולא מקבלת דואר — בשקט. השקט הזה הוא הסיבה שהמתקין בודק את הטוקן במקום להניח
-שהוא נכון.</p></div>
-<p>השלב האחרון שלו מבצע את הבדיקה מול השרתים שלנו ומדפיס אחת מהאפשרויות:</p>
+<p>לפני השלב הזה אנחנו שולחים אליכם שני ערכים — <strong>מזהה התקנה</strong>
+ו<strong>טוקן התקנה</strong>. אלה הערכים היחידים שמגיעים מאיתנו; כל היתר נוצר
+כאן, על המכונה שלכם, ואינו עובר בשום שלב.</p>
+<div class="code"><button class="copy" type="button">העתק</button><pre>INSTALL_ID=&lt;the id we sent&gt; INSTALL_TOKEN=&lt;the token we sent&gt; ./install.sh install</pre></div>
+<div class="note"><p class="co-h">טוקן אחד עושה שתי עבודות</p>
+<p>הטוקן פותח שני ערוצים: דרכו ההתקנה <strong>מדווחת לנו שהיא חיה</strong>, ודרכו
+היא <strong>מושכת את הדואר שנשלח ללשכה</strong>. חסר טוקן — התוכנה עובדת כרגיל,
+אף אחד לא מקבל התראה, ודואר פשוט לא מגיע. אין שגיאה ואין יומן שמצביע על כך, ולכן
+המתקין בודק את הטוקן בפועל ולא מסתפק בכך שמישהו הדביק ערך.</p></div>
+<p>הפעולה האחרונה של המתקין היא הבדיקה הזו מול השרתים שלנו, והיא מדפיסה אחת מארבע:</p>
 <table><thead><tr><th>מה מודפס</th><th>המשמעות</th></tr></thead><tbody>
 <tr><td class="mono">verified</td><td>הדיווח והדואר הנכנס פעילים</td></tr>
-<tr><td class="mono">REFUSED (401)</td><td>המזהה והטוקן אינם זוג תואם — בדקו את שניהם מול מה ששלחנו</td></tr>
-<tr><td class="mono">SUSPENDED (403)</td><td>החלטה שלנו, לא תקלת הגדרה — פנו אלינו</td></tr>
-<tr><td class="mono">could not reach</td><td>אין מהמכונה הזו יציאת HTTPS. פתחו והריצו שוב — הפקודה בטוחה לחזרה</td></tr>
+<tr><td class="mono">REFUSED (401)</td><td>המזהה והטוקן אינם שייכים זה לזה. השוו את שניהם למה ששלחנו</td></tr>
+<tr><td class="mono">SUSPENDED (403)</td><td>ההשעיה נעשתה אצלנו ובכוונה. זו אינה תקלת הגדרה — דברו איתנו</td></tr>
+<tr><td class="mono">could not reach</td><td>למכונה הזו אין יציאה ב-HTTPS. פתחו אותה והריצו שוב; אפשר להריץ את הפקודה שוב ושוב בלי נזק</td></tr>
 </tbody></table>
-<p><strong>אף אחת מהן אינה עוצרת את ההתקנה.</strong> השכר שלכם אינו תלוי באישור
-שלנו, ושרת שסירב לסיים בגלל כלל חומת אש שאיחר הוא לשכה שאינה יכולה לשלם משכורות.</p>
+<p><strong>אף אחת מהתשובות האלה אינה עוצרת את ההתקנה.</strong> תשלום המשכורות
+אצלכם לא אמור להיות תלוי באישור שלנו. התקנה שהייתה נעצרת עד שייפתח כלל בחומת אש
+היא לשכה שלא משלמת משכורות בזמן בגלל שורה בקונפיגורציה.</p>
 <p>ההתקנה מבקשת דוא״ל וסיסמה למנהל הראשון, ואז מדפיסה את הכתובות לפתיחה. אפשר
 להריץ שוב בבטחה: היא מתקנת התקנה שלא הושלמה במקום להתחיל שנייה.</p>
 <div class="note"><p class="co-h">המערכת עולה ריקה, במכוון</p>
@@ -721,19 +722,18 @@ cd payroll-onprem
 <h4>שלב 3 — תיעוד מה שיש עכשיו בידיכם</h4>
 <p>לפני שממשיכים, השלימו את פרק 5. זהו השלב היחיד במסמך הזה שאי אפשר לתקן בדיעבד.</p>
 </section><section class="sec" id="keys-he"><span class="sec-n">05</span><h2>חומר מפתחות, ומה שאי אפשר לשחזר</h2>
-<p>ההתקנה יוצרת קובץ אחד, <code>.env</code>, שמחזיק את הסודות של ההתקנה הזו. שניים
-מהמפתחות שבו מצפינים נתונים במנוחה: אחד אוטם כל מסמך של עובד, והשני הוא מה
-שמאפשר לקרוא מספר תעודת זהות.</p>
+<p>ההתקנה יוצרת קובץ אחד, <code>.env</code>, שמחזיק את הסודות של ההתקנה הזו. אחד
+מהמפתחות שבו מצפין נתונים במנוחה: הוא מה שמאפשר לקרוא מספר תעודת זהות.</p>
 <div class="stop"><p class="co-h">זה בלתי הפיך, וזה התכנון</p>
 <p><strong>אם <code>.env</code> אובד, אי אפשר לשחזר את הנתונים שבנפחים — לא אתם,
 לא אנחנו, ואף אחד אחר.</strong> אין ברשותנו עותק ואין נאמנות מפתחות. בדיוק זה מה
 שנותן להצפנה משמעות: אין מפתח שלנו שאפשר לדרוש בצו, לגנוב או להשתמש בו בטעות. זה
 גם אומר שהגיבוי של הקובץ הזה באחריותכם ולא באחריות אף אחד אחר.</p></div>
-<div class="code"><button class="copy" type="button">העתק</button><pre><span class="c"># העתיקו למקום שאינו המכונה הזו, לפני שממשיכים</span>
+<div class="code"><button class="copy" type="button">העתק</button><pre><span class="c"># copy somewhere off this machine, before going further</span>
 cp .env /secure/offline/location/payroll-env-$(date +%F)</pre></div>
-<div class="warn"><p class="co-h">לעולם אל תייצרו מחדש את שני המפתחות האלה</p>
+<div class="warn"><p class="co-h">לעולם אל תייצרו מחדש את המפתח הזה</p>
 <p>ייצור מחדש של <code>NATIONAL_ID_KEYS</code>
-בהתקנה שכבר מחזיקה רשומות מנתק כל מספר זהות וכל מסמך אטום שכבר נכתבו. השורות
+בהתקנה שכבר מחזיקה רשומות מנתק כל מספר זהות שכבר נכתב. השורות
 נשארות; התוכן שלהן הופך לבלתי קריא לצמיתות.</p></div>
 <h4>טיפול מומלץ</h4>
 <ul>
@@ -746,7 +746,7 @@ cp .env /secure/offline/location/payroll-env-$(date +%F)</pre></div>
 <div class="tw"><table>
 <thead><tr><th>&nbsp;</th><th>כתובת</th><th>מי משתמש</th></tr></thead><tbody>
 <tr><td>קונסולה</td><td class="mono">https://&lt;server&gt;</td><td>לשכת השכר</td></tr>
-<tr><td>פורטל</td><td class="mono">https://&lt;server&gt;:4401</td><td>עובדים</td></tr>
+
 </tbody></table></div>
 <div class="warn"><p class="co-h">HTTP רגיל אינו תצורה נתמכת</p>
 <p>האפליקציות מסמנות את עוגיית ההתחברות כ-<code>Secure</code>, ודפדפנים משליכים
@@ -776,18 +776,21 @@ cp .env /secure/offline/location/payroll-env-$(date +%F)</pre></div>
 <p>החבילה מפרסמת <strong>שני</strong> פורטים בלבד.</p>
 <table><thead><tr><th>פורט</th><th>למה</th><th>מי צריך להגיע</th></tr></thead><tbody>
 <tr><td class="mono">443</td><td>הקונסולה</td><td>הצוות שלכם, מתוך הרשת</td></tr>
-<tr><td class="mono">80</td><td>אתגר חידוש תעודה</td><td>רק אם שם המארח שלכם ציבורי</td></tr>
+<tr><td class="mono">80</td><td>אימות הבעלות על השם, לצורך התעודה</td><td>רק אם השם נפתר מהאינטרנט</td></tr>
 </tbody></table>
-<p>שום דבר אינו צריך להיות נגיש <strong>מהאינטרנט</strong>. פורט 80 נדרש רק כאשר
-לשרת יש שם ציבורי ואתם רוצים תעודה מוכרת; אחרת השאירו אותו סגור וההתקנה תנפיק
-תעודה משלה.</p>
+<p>שום פורט אינו צריך להיפתח <strong>לאינטרנט</strong>. פורט 80 נחוץ רק אם לשרת
+יש שם שנפתר מבחוץ ואתם רוצים תעודה שדפדפנים מכירים — רשות ציבורית מאמתת את
+הבעלות על השם דרכו. בלעדיו ההתקנה מנפיקה תעודה משלה, וזה תקין לחלוטין ברשת
+פנימית.</p>
 <div class="code"><button class="copy" type="button">העתק</button><pre>sudo ufw allow 443/tcp
 sudo ufw allow 80/tcp
 sudo ufw status</pre></div>
-<p>פורט הניהול נעדר מהרשימה במכוון: הוא מוגבל ל־<code class="mono">127.0.0.1</code>,
-ולכן שום דפדפן ברשת שלכם אינו יכול לפתוח אותו ושום כלל חומת אש לא ישנה זאת.</p>
-<p>אם הצוות מקבל <em>פסק זמן בחיבור</em> ולא אזהרת תעודה — הפורט חסום איפשהו
-ביניכם לבין המכונה. בדקו קודם את חומת האש של המארח, ואז כל מה שביניהם.</p>
+<p>פורט הניהול אינו ברשימה, וזה במכוון: הוא מאזין רק על
+<code class="mono">127.0.0.1</code>. אף דפדפן ברשת שלכם לא יגיע אליו, ופתיחת
+פורט בחומת האש לא תשנה את זה — אין שם מה לפתוח.</p>
+<p>אם הצוות מקבל timeout במקום אזהרת תעודה, הבקשה לא הגיעה למכונה בכלל. התחילו
+מחומת האש של השרת עצמו, ומשם המשיכו החוצה: הייפרוויזר, קבוצת אבטחה בענן, ACL על
+ה-VLAN.</p>
 </section><section class="sec" id="access-he"><span class="sec-n">07</span><h2>זהויות, גישה, ומה שאנחנו לא יכולים לעשות</h2>
 <h4>מי יכול להתחבר</h4>
 <p>רק חשבונות שהמנהל שלכם יוצר בהתקנה הזו. סיסמאות נשמרות מגובבות בפונקציה עתירת
@@ -798,10 +801,9 @@ sudo ufw status</pre></div>
 <thead><tr><th>אפליקציה</th><th>מי</th><th>רואה</th></tr></thead><tbody>
 <tr><td>קונסולה</td><td>צוות השכר</td><td>לקוחות, עובדים, הרצות, תלושים</td></tr>
 <tr><td>ניהול</td><td>המנהלים שלכם</td><td>הגדרות, משתמשים, מחברים, נהלים</td></tr>
-<tr><td>פורטל</td><td>עובדים של הלקוחות שלכם</td><td><strong>רק את שלהם</strong> — מסמכים ותלושים</td></tr>
+
 </tbody></table></div>
-<p>הפורטל עונה רק בשם המתחם שנרשם בזמן ההתקנה ודוחה בקשות שמגיעות בכל שם אחר.
-עובד אינו יכול להגיע לתלוש של עמית, כולל עמית בעל אותו שם.</p>
+
 <div class="note"><p class="co-h">מה הספק יכול ומה אינו יכול</p>
 <p><strong>אין לנו גישה להתקנה הזו.</strong> אין מנהרה, אין חשבון תמיכה, אין
 מפתח ואין קונסולה מרוחקת. אנחנו לא יכולים לקרוא את הנתונים שלכם, להפעיל מחדש
@@ -857,19 +859,19 @@ sudo ufw status</pre></div>
 חשבון המנהל של המארח. זה המחיר של עדכוני אבטחה ללא השגחה על שרת שאף אחד לא מתחבר
 אליו. <strong>אם מדיניות האבטחה שלכם לא מאפשרת זאת, זו מסקנה לגיטימית</strong> —
 הגדירו <code>AUTO_UPDATE_MONITOR_ONLY=true</code> ועדכנו ביוזמתכם.</p></div>
-<div class="code"><button class="copy" type="button">העתק</button><pre>AUTO_UPDATE_MONITOR_ONLY=true   <span class="c"># מדווח מה היה עושה, לא משנה כלום</span>
-BUNDLE_VERSION=1.1.6            <span class="c"># נעילה לגרסה מדויקת; עדכונים לא ירוצו</span></pre></div>
+<div class="code"><button class="copy" type="button">העתק</button><pre>AUTO_UPDATE_MONITOR_ONLY=true   <span class="c"># reports what it would do, changes nothing</span>
+BUNDLE_VERSION=1.1.6            <span class="c"># pin an exact version; updates never fire</span></pre></div>
 <p>בכל מקרה, <code>./install.sh update</code> מחיל את הגרסה הנוכחית מיד, בשליטתכם.</p>
 <h4>איך מוודאים שעדכון באמת קרה</h4>
 <p>אל תסיקו זאת מהיעדר שגיאות. מנגנון עדכון שאינו מצליח להגיע למאגר רושם סירוב
 ובכל זאת מסיים את המחזור בדיווח שלא עודכן דבר — וזה נקרא כמו מערכת שקטה ותקינה.
 בדקו את הגרסה הרצה ישירות:</p>
-<div class="code"><button class="copy" type="button">העתק</button><pre>./install.sh status              <span class="c"># מדפיס את הגרסה הרצה של כל שירות</span>
+<div class="code"><button class="copy" type="button">העתק</button><pre>./install.sh status              <span class="c"># prints the running version of every service</span>
 docker compose logs watchtower | tail -20</pre></div>
 <p>הגרסה מוצגת גם בסרגל הצד של הקונסולה ושל מסך הניהול. אחרי גרסה חדשה, ודאו
 שהמספר השתנה. אנחנו רואים בזה בדיקה חודשית שגרתית, לא שלב באיתור תקלות.</p>
 </section><section class="sec" id="backup-he"><span class="sec-n">10</span><h2>גיבוי ושחזור</h2>
-<div class="code"><button class="copy" type="button">העתק</button><pre>./install.sh backup   <span class="c"># מסד נתונים + מסמכים, אל ./backups/&lt;timestamp&gt;/</span></pre></div>
+<div class="code"><button class="copy" type="button">העתק</button><pre>./install.sh backup   <span class="c"># database + documents, into ./backups/&lt;timestamp&gt;/</span></pre></div>
 <p>נוצרים שני פריטים: תמונת מסד הנתונים וארכיון המסמכים השמורים.
 <strong>צריך את שניהם.</strong> מסד נתונים ששוחזר בלי המסמכים נותן לכם התקנה שבה
 כל עובד קיים ואף אחד מהקבצים שלו לא נפתח.</p>
@@ -899,8 +901,8 @@ docker compose logs watchtower | tail -20</pre></div>
 </tbody></table></div>
 <p>יומן היציאה הוא זה שכדאי להראות למבקר: זו הרשומה שמאפשרת לכם לענות על השאלה
 "מה המערכת הזו שלחה החוצה אי פעם" בלי להסתמך על המילה שלנו.</p>
-<div class="code"><button class="copy" type="button">העתק</button><pre>./install.sh logs               <span class="c"># מעקב אחרי הכול</span>
-./install.sh logs gateway       <span class="c"># רק התהליך שיכול לצאת החוצה</span></pre></div>
+<div class="code"><button class="copy" type="button">העתק</button><pre>./install.sh logs               <span class="c"># follow everything</span>
+./install.sh logs gateway       <span class="c"># only the process that can reach outside</span></pre></div>
 <p>סבב יומני הקונטיינרים נקבע בתצורת מנוע ה-Docker שלכם. אם יש לכם חובת שמירה,
 הגדירו אותה שם — אנחנו לא דורסים אותה.</p>
 </section><section class="sec" id="connector-he"><span class="sec-n">12</span><h2>המחבר למערכת השכר</h2>
@@ -917,11 +919,11 @@ WORKER_TOKEN=...</pre></div>
 <strong>זהו הנעלם הגדול ביותר בהטמעה מקומית</strong>, ואנחנו מעדיפים לקבוע לו
 תאריך מראש ולא לגלות אותו באמצע סגירת החודש שלכם.</p></div>
 </section><section class="sec" id="ops-he"><span class="sec-n">13</span><h2>מדריך תפעול</h2>
-<div class="code"><button class="copy" type="button">העתק</button><pre>./install.sh status     <span class="c"># מה רץ, באיזו גרסה, ומה הכתובות</span>
-./install.sh logs       <span class="c"># מעקב אחרי הכול; אפשר להוסיף שם שירות</span>
-./install.sh backup     <span class="c"># מסד נתונים + מסמכים</span>
-./install.sh update     <span class="c"># החלת הגרסה הנוכחית עכשיו</span>
-./install.sh stop       <span class="c"># עצירה; הנתונים שלכם לא נוגעים</span></pre></div>
+<div class="code"><button class="copy" type="button">העתק</button><pre>./install.sh status     <span class="c"># what is running, which version, and the addresses</span>
+./install.sh logs       <span class="c"># follow everything; add a service name to narrow it</span>
+./install.sh backup     <span class="c"># database + documents</span>
+./install.sh update     <span class="c"># apply the current release now</span>
+./install.sh stop       <span class="c"># stop; the data is untouched</span></pre></div>
 <h4>בדיקות שגרתיות</h4>
 <div class="tw"><table>
 <thead><tr><th>מתי</th><th>מה בודקים</th></tr></thead><tbody>
@@ -932,7 +934,7 @@ WORKER_TOKEN=...</pre></div>
 <tr><td>בשינוי כוח אדם</td><td>חשבונות הושבתו; החזקת קובץ המפתחות עדיין נכונה (פרקים 5, 7)</td></tr>
 </tbody></table></div>
 <h4>הסרה מלאה</h4>
-<div class="code"><button class="copy" type="button">העתק</button><pre>docker compose down -v   <span class="c"># עוצר הכול ומוחק את נפחי הנתונים</span></pre></div>
+<div class="code"><button class="copy" type="button">העתק</button><pre>docker compose down -v   <span class="c"># stops everything AND deletes the data volumes</span></pre></div>
 <p>שום דבר משלכם לא קיים במקום אחר, אז זה כל הסיפור. אם הגדרתם טלמטריה, הודיעו
 לנו ונמחק את מה שדווח.</p>
 </section><section class="sec" id="trouble-he"><span class="sec-n">14</span><h2>איתור תקלות</h2>
@@ -941,7 +943,7 @@ WORKER_TOKEN=...</pre></div>
 <tr><td>דף ההתחברות חוזר לעצמו, בלי שגיאה בשום מקום</td><td>אתם על <code>http://</code>. ראו פרק 6 — הדפדפן משליך עוגיית <code>Secure</code></td></tr>
 <tr><td>הדפדפן מזהיר שהתעודה אינה מהימנה</td><td>אישור השורש עדיין לא הופץ. פרק 6</td></tr>
 <tr><td>״להקצות מחבר״ בפעולת שכר</td><td>עדיין לא הוקצה מחבר ללשכה הזו — פנו אלינו.</td></tr>
-<tr><td>הפורטל לא מציג כלום בשום כתובת</td><td><code>SITE_ADDRESS</code> לא תואם לשם שהוקלד. הריצו שוב <code>./install.sh bootstrap</code></td></tr>
+<tr><td>דף לא נטען בשום כתובת</td><td><code>SITE_ADDRESS</code> לא תואם לשם שהוקלד. הריצו שוב <code>./install.sh bootstrap</code></td></tr>
 <tr><td>מסמך נדחה בשלב ה-AI</td><td>צירופי קבצים חסומים כברירת מחדל וה-OCR לא קרא את הסריקה. סריקה ברורה יותר, או שינוי מודע של ההגדרה. פרק 8</td></tr>
 <tr><td>תזכורות לא נשלחות</td><td><code>./install.sh logs scheduler</code> — הוא מחזיר 503 כשמשימה הפסיקה להצליח</td></tr>
 <tr><td>הגרסה לא משתנה אחרי שיצאה גרסה</td><td>מנגנון העדכון לא מגיע למאגר, או שהוא במצב ניטור בלבד. פרק 9 — בדקו את היומנים, לא את היעדר השגיאות</td></tr>

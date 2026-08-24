@@ -323,10 +323,10 @@ services:
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
       ACME_EMAIL: ${ACME_EMAIL:-}
-      CONSOLE_PORT: ${CONSOLE_PORT:-4201}
+      CONSOLE_PORT: ${CONSOLE_PORT:-443}
       ADMIN_PORT: ${ADMIN_PORT:-4301}
     ports:
-      - "${CONSOLE_PORT:-4201}:${CONSOLE_PORT:-4201}"
+      - "${CONSOLE_PORT:-443}:${CONSOLE_PORT:-443}"
       # The admin app is OUR backoffice, not part of what a bureau buys: it
       # shows commercial fields (pricing bands, ARR), AI spend and internal
       # controls, and its API routes are all `requireAdmin`. So the port is

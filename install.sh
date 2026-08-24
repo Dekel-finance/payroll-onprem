@@ -98,7 +98,7 @@ cmd_check() {
   done
 
   step "Ports"
-  for p in "${CONSOLE_PORT:-4201}" "${ADMIN_PORT:-4301}"; do
+  for p in "${CONSOLE_PORT:-443}" "${ADMIN_PORT:-3300}"; do
     if command -v ss >/dev/null 2>&1 && ss -ltn 2>/dev/null | grep -q ":$p "; then
       warn "port $p is already in use — set a different one in .env"; fail=1
     else
@@ -182,7 +182,7 @@ AUTO_UPDATE_INTERVAL=${AUTO_UPDATE_INTERVAL:-600}
 AUTO_UPDATE_MONITOR_ONLY=${AUTO_UPDATE_MONITOR_ONLY:-false}
 AUTO_UPDATE_CONNECTOR=${AUTO_UPDATE_CONNECTOR:-false}
 
-CONSOLE_PORT=${CONSOLE_PORT:-4201}
+CONSOLE_PORT=${CONSOLE_PORT:-443}
 ADMIN_PORT=${ADMIN_PORT:-4301}
 # Which interface the admin port is published on. `127.0.0.1` means the admin
 # application runs but no browser on your network can reach it — it is the
@@ -284,7 +284,9 @@ cmd_status() {
   dc ps
   local scheme=https host="${SITE_ADDRESS:-localhost}"
   say ""
-  say "  ${BOLD}Console${OFF}  $scheme://$host:${CONSOLE_PORT:-4201}   ${DIM}the payroll office${OFF}"
+  local port_suffix=""
+  [ "${CONSOLE_PORT:-443}" = "443" ] || port_suffix=":${CONSOLE_PORT}"
+  say "  ${BOLD}Console${OFF}  $scheme://$host$port_suffix   ${DIM}the payroll office${OFF}"
   say ""
 }
 
