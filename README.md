@@ -88,7 +88,6 @@ A single file, `.env`, holding this install's secrets.
 | | Address | Who uses it |
 |---|---|---|
 | Console | `https://<your-server>:4201` | the payroll office |
-| Admin | `https://<your-server>:4301` | settings, users, connectors |
 | Portal | `https://<your-server>:4401` | employees |
 
 ### The certificate warning, and why it is there

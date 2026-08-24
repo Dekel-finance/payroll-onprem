@@ -181,6 +181,12 @@ AUTO_UPDATE_CONNECTOR=${AUTO_UPDATE_CONNECTOR:-false}
 
 CONSOLE_PORT=${CONSOLE_PORT:-4201}
 ADMIN_PORT=${ADMIN_PORT:-4301}
+# Which interface the admin port is published on. `127.0.0.1` means the admin
+# application runs but no browser on your network can reach it — it is the
+# supplier's back office, and the console covers everything you need. Support
+# reaches it through an SSH tunnel:
+#   ssh -L 4301:127.0.0.1:4301 <this host>   then https://localhost:4301
+ADMIN_BIND=${ADMIN_BIND:-127.0.0.1}
 PORTAL_PORT=${PORTAL_PORT:-4401}
 BACKUP_DIR=./backups
 
@@ -278,7 +284,6 @@ cmd_status() {
   local scheme=https host="${SITE_ADDRESS:-localhost}"
   say ""
   say "  ${BOLD}Console${OFF}  $scheme://$host:${CONSOLE_PORT:-4201}   ${DIM}the payroll office${OFF}"
-  say "  ${BOLD}Admin${OFF}    $scheme://$host:${ADMIN_PORT:-4301}   ${DIM}settings and users${OFF}"
   say "  ${BOLD}Portal${OFF}   $scheme://$host:${PORTAL_PORT:-4401}   ${DIM}where employees sign in${OFF}"
   say ""
 }
@@ -290,6 +295,11 @@ cmd_update() {
   dc pull
   dc up -d
   ok "updated — your data was not touched"
+  # Images move on `pull`; the compose file and this script do not. A change to
+  # how the install is wired (a port, a new service) arrives with a `git pull`
+  # in this directory, and an install that never pulls keeps its old wiring
+  # while reporting the new version.
+  say "  ${DIM}configuration changes arrive with: git pull && ./install.sh update${OFF}"
   cmd_status
 }
 

@@ -19,11 +19,18 @@
  *                          the shared worker is ours; on-prem it means the
  *                          console answers "provision a connector" while the
  *                          connector runs two containers away.
- *   4. the first user    — `console_users` + `admin_users`. Both apps sign a
- *                          user in with a password or an emailed one-time code,
- *                          and on-prem there is no mail sender configured and no
- *                          row to send a code to: the login page is correct,
- *                          reachable and unusable.
+ *   4. the first user    — `console_users`. The console signs a user in with a
+ *                          password or an emailed one-time code, and on-prem
+ *                          there is no mail sender configured and no row to send
+ *                          a code to: the login page is correct, reachable and
+ *                          unusable.
+ *
+ *                          It does NOT create an `admin_users` row. The admin
+ *                          application is the supplier's back office, its port
+ *                          is bound to loopback, and the person running a
+ *                          bureau has no business signing into it. An install
+ *                          the supplier operates itself sets
+ *                          `CREATE_ADMIN_USER=true`.
  *
  * Idempotent — every write is an upsert keyed on something stable, so running it
  * again after a version bump repairs a missing row without touching the rest.
@@ -145,15 +152,23 @@ if (FIRST_EMAIL && FIRST_PASSWORD) {
     },
     { upsert: true },
   );
-  await db.collection("admin_users").updateOne(
-    { email: FIRST_EMAIL },
-    {
-      $set: { email: FIRST_EMAIL, role: "admin", status: "active", passwordHash, updatedAt: now },
-      $setOnInsert: { createdAt: now },
-    },
-    { upsert: true },
+  // Back-office access, and only where the supplier is the operator. On an
+  // ordinary install the admin port is bound to loopback (docker-compose.yml)
+  // and no admin user exists — two independent reasons a screen that was never
+  // meant for the bureau cannot be opened by it.
+  if (process.env.CREATE_ADMIN_USER === "true") {
+    await db.collection("admin_users").updateOne(
+      { email: FIRST_EMAIL },
+      {
+        $set: { email: FIRST_EMAIL, role: "admin", status: "active", passwordHash, updatedAt: now },
+        $setOnInsert: { createdAt: now },
+      },
+      { upsert: true },
+    );
+  }
+  console.log(
+    `user ${FIRST_EMAIL} → console owner${process.env.CREATE_ADMIN_USER === "true" ? " + admin" : ""}`,
   );
-  console.log(`user ${FIRST_EMAIL} → console owner + admin`);
 } else {
   console.log("FIRST_USER_EMAIL / FIRST_USER_PASSWORD unset — no user created, and nothing else can create one");
 }

@@ -426,7 +426,17 @@ services:
       PORTAL_PORT: ${PORTAL_PORT:-4401}
     ports:
       - "${CONSOLE_PORT:-4201}:${CONSOLE_PORT:-4201}"
-      - "${ADMIN_PORT:-4301}:${ADMIN_PORT:-4301}"
+      # The admin application is the supplier's back office, not part of what
+      # you run day to day — the console covers settings, users and connectors.
+      # It is therefore bound to LOOPBACK: the container runs, everything that
+      # talks to it inside the install is unaffected, and no browser on your
+      # network can open it. Support reaches it, when you ask them to, through
+      # an SSH tunnel you open and close:
+      #
+      #     ssh -L 4301:127.0.0.1:4301 <this host>   →  https://localhost:4301
+      #
+      # Change this only if you have been asked to.
+      - "${ADMIN_BIND:-127.0.0.1}:${ADMIN_PORT:-4301}:${ADMIN_PORT:-4301}"
       - "${PORTAL_PORT:-4401}:${PORTAL_PORT:-4401}"
       # ACME's HTTP-01 challenge, and nothing else. A LAN install never performs
       # one, so it sets ACME_PORT=0 and Docker picks an unused port — claiming

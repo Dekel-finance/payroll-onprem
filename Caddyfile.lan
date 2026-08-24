@@ -65,6 +65,21 @@ https://{$SITE_ADDRESS}:{$ADMIN_PORT} {
 }
 }
 
+# The same admin app, reached over an SSH tunnel.
+#
+# The host port is bound to loopback (see `docker-compose.yml`), so this block
+# answers only through `ssh -L $ADMIN_PORT:127.0.0.1:$ADMIN_PORT <host>`, where
+# the browser sends `Host: localhost` and the block above — which matches
+# SITE_ADDRESS — does not apply. Caddy's own certificate, always: a tunnel
+# endpoint has no public name to issue for, so expect a warning.
+https://:{$ADMIN_PORT} {
+	tls internal
+	reverse_proxy admin:3300 {
+		lb_try_duration 30s
+		lb_try_interval 250ms
+	}
+}
+
 https://{$SITE_ADDRESS}:{$PORTAL_PORT} {
 	tls internal
 	reverse_proxy portal:3400 {
