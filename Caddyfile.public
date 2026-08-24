@@ -65,32 +65,13 @@ https://{$SITE_ADDRESS}:{$ADMIN_PORT} {
 # answers only through `ssh -L $ADMIN_PORT:127.0.0.1:$ADMIN_PORT <host>`, where
 # the browser sends `Host: localhost` and the block above — which matches
 # SITE_ADDRESS — does not apply. Caddy's own certificate, always: a tunnel
-# endpoint has no public name to issue for, so expect a warning.
+# endpoint has no public name to issue for, so staff click through the warning.
 https://:{$ADMIN_PORT} {
 	tls internal
 	reverse_proxy admin:3300 {
 		lb_try_duration 30s
 		lb_try_interval 250ms
 	}
-}
-
-https://{$SITE_ADDRESS}:{$PORTAL_PORT} {
-	reverse_proxy portal:3400 {
-	# Hold the request instead of failing it while a container is being replaced.
-	#
-	# Measured: recreating one app container costs 1.6 seconds during which Caddy
-	# has nothing to talk to and answers 502. That is short, and 502 is still the
-	# wrong answer — an unattended update should not put an error in front of
-	# somebody who was mid-task. Caddy retries for up to 30s at 250ms intervals,
-	# so the request that lands in the gap simply takes about two seconds longer
-	# and then succeeds.
-	#
-	# Only retried when NO response was received, which is Caddy's default and
-	# the reason this is safe for a POST as well: a request the app already began
-	# answering is never sent twice.
-	lb_try_duration 30s
-	lb_try_interval 250ms
-}
 }
 
 # Anything arriving on plain 80 that is not an ACME challenge goes to the

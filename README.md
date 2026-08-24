@@ -1,7 +1,7 @@
 # Payroll platform — on-premise install
 
 Everything the platform needs, running on a server you own: the database, the
-payroll console, the back office, the employee portal, the automation agent, and
+payroll console, the back office, the automation agent, and
 the connector that drives מיכפל on a Windows machine in your office.
 
 **No payroll data leaves your building.** The one process with a route to the
@@ -10,7 +10,7 @@ any text reaches a model vendor, and puts the real values back in the answer.
 The applications are on a Docker network with no route out at all — not by
 policy, by construction: a call that skipped the gateway would fail to resolve.
 
-[עברית](README.he.md) · [Illustrated guide](https://onprem.dekel.io) · Version 1.1.4
+[עברית](README.he.md) · [Illustrated guide](https://onprem.dekel.io) · Version 1.1.6
 
 ---
 
@@ -32,13 +32,16 @@ You also need:
   | Destination | Why | Required |
   |---|---|---|
   | `dekelmichpalil.azurecr.io` | software images | **yes** |
-  | `api.anthropic.com` | AI vendor, reached only by the gateway | only with AI features |
-  | `api.interfaze.ai` | **second AI vendor**, reads documents | only with document extraction |
-  | your reporting endpoint | aggregate telemetry | no — blank sends nothing |
+  | `dekel.sh` | this install reports its health, and collects your inbound email | **yes** |
+  | `broker.dekel.io` | AI, reached only by the gateway | only with AI features |
 
-  There are **two AI vendors, not one**. An allow-list or a processing register
-  that names only the well-known one is incomplete.
-- **A model vendor key**, or ask us to supply one.
+  **Your server never contacts an AI vendor directly.** It calls our broker,
+  which holds the vendor keys and makes that call — so there is no vendor
+  credential on this machine and nothing here to rotate. What the broker
+  receives has already had identity numbers, email addresses, phone numbers and
+  names replaced by the gateway on your side.
+- **The install id and token we send you.** Two lines. The installer generates
+  everything else.
 - *Optional:* the **Windows machine running מיכפל**, reachable from this server
   on port 3389. Without it everything else still works; the connector simply
   does not start.
@@ -59,12 +62,66 @@ It reports what is missing and writes nothing.
 git clone https://github.com/Dekel-finance/payroll-onprem.git
 cd payroll-onprem
 
-./install.sh install
+INSTALL_ID=<the id we sent>  INSTALL_TOKEN=<the token we sent>  ./install.sh install
+```
+
+**The id and the token are the only two values we send you, and they are not
+optional.** One token does two jobs: this install reports its health to us with
+it, and it **collects your inbound email** with it. Without them the software
+runs, reports nothing and receives no mail — silently, which is exactly why the
+installer now checks them and tells you.
+
+### Or hand it to a coding agent
+
+If your IT team uses Claude Code, Cursor or similar, this is one paste. Fill in
+the four values first — the agent cannot invent them and should not try.
+
+```text
+Install the Dekel payroll on-prem bundle on this machine, from this repo.
+
+Values I am giving you (do not invent or substitute these):
+  SITE_ADDRESS  = <the hostname staff will type, e.g. payroll.acme.local>
+  INSTALL_ID    = <the id Dekel sent us>
+  INSTALL_TOKEN = <the token Dekel sent us>
+  AGENCY_NAME   = <our bureau's name, as it should appear in the app>
+
+Do this, in order, and stop and tell me if a step does not do what it says:
+
+1. Run ./install.sh check and report anything it says is missing.
+2. Run:
+     INSTALL_ID=<id> INSTALL_TOKEN=<token> SITE_ADDRESS=<host> \
+     AGENCY_NAME=<name> ./install.sh install
+   It generates every secret into .env. It must run ONCE. NATIONAL_ID_KEYS in
+   that file seals every identity number we will ever store — if it is
+   regenerated later, all of them become unreadable. Never re-run the secret
+   generation over an existing .env.
+3. Leave every other value at its default. The control plane and the AI broker
+   addresses are built into the image on purpose; a blank means "use the
+   default", not "disabled".
+4. Read the installer's last lines back to me. It checks our token and prints
+   one of: verified / REFUSED (401) / SUSPENDED (403) / could not reach. A
+   failure does NOT stop the install, but tell me which one it was — it decides
+   what I have to fix.
+5. Run ./install.sh status and confirm every service is healthy.
+
+Then give me the URL to sign in at, and remind me to copy .env somewhere off
+this machine. Do not commit .env anywhere. Do not load any demo or sample data.
 ```
 
 The installer asks for an email address and a password for the first
-administrator, then prints the three addresses to open. It takes about five
-minutes, most of it downloading.
+administrator, then prints the addresses to open. It takes about five minutes,
+most of it downloading.
+
+Its last step verifies the token against us and prints one of:
+
+| | |
+|---|---|
+| `verified` | health reporting and inbound email are live |
+| `REFUSED (401)` | the id and the token are not a matching pair — check both |
+| `SUSPENDED (403)` | deliberate on our side; contact us |
+| `could not reach` | this host cannot make outbound HTTPS — open it and re-run |
+
+None of these stop the install. Your payroll does not depend on our permission.
 
 **The install comes up empty** — no clients, no employees, no payslips. Your
 records arrive through onboarding and the sync from your payroll system. An
@@ -76,8 +133,8 @@ before you could trust anything on the screen.
 A single file, `.env`, holding this install's secrets.
 
 > **Back `.env` up, somewhere that is not this machine, before you go further.**
-> Two of the keys in it seal data at rest: one encrypts every employee document,
-> the other is what makes an identity number readable. If the file is lost, the
+> One of the keys in it seals data at rest: it is what makes an identity number
+> readable. If the file is lost, the
 > data in the volumes cannot be recovered by us or by anyone else. That is the
 > design — it is also irreversible.
 
@@ -88,7 +145,6 @@ A single file, `.env`, holding this install's secrets.
 | | Address | Who uses it |
 |---|---|---|
 | Console | `https://<your-server>:4201` | the payroll office |
-| Portal | `https://<your-server>:4401` | employees |
 
 ### The certificate warning, and why it is there
 
@@ -127,11 +183,14 @@ automatically. Port 80 must be reachable for the check.
 
 ## Connecting מיכפל
 
-The connector drives מיכפל over RDP on a Windows machine on your network.
+**The connector does not run on this server.** It drives מיכפל over RDP from
+our own infrastructure, so there is nothing to install here and this machine
+needs no route to the Windows box.
 
-1. In `.env`, set `RDP_HOST` to that machine's address, and `RDP_USER` /
-   `RDP_PASS` to an account that can sign into it.
-2. `docker compose --profile michpal up -d`
+Tell us which מיכפל installation this bureau uses and we will point a connector
+at it. If we ask you to set `MICHPAL_WORKER_URL` and `WORKER_TOKEN` in `.env`,
+those are the address and bearer of that connector — reached over HTTPS, like
+any other outside service.
 
 One run at a time, deliberately: a Windows machine gives one interactive session
 per user, and two automations sharing one desktop interfere with each other in
@@ -155,7 +214,7 @@ gets restarted is deliberately narrow:
 
 | | updates by itself |
 |---|---|
-| the applications (console, admin, portal, and the background services) | **yes** — a few seconds each, one at a time |
+| the applications (console, admin, and the background services) | **yes** — a few seconds each, one at a time |
 | the database | **never.** A database upgrade is a data migration and is not something to do unattended at 03:00. |
 | the מיכפל connector | **no**, by default. It runs one session at a time and keeps a run's state in memory, so restarting it mid-run would end that payroll run without reporting it. `./install.sh update` restarts it when you are watching. |
 
@@ -164,7 +223,7 @@ restart:
 
 ```bash
 AUTO_UPDATE_MONITOR_ONLY=true   # it reports what it would do, and does nothing
-BUNDLE_VERSION=1.1.4            # pin an exact version; updates never fire
+BUNDLE_VERSION=1.1.6            # pin an exact version; updates never fire
 ```
 
 Either way `./install.sh update` applies the current release immediately.
@@ -227,8 +286,8 @@ want us to look at something, you send us what you choose to send.
 | Symptom | Where to look |
 |---|---|
 | The login page returns to itself | You are on `http://`. See the certificate section above. |
-| "Provision a connector" on a מיכפל action | `RDP_HOST` is unset, or `./install.sh bootstrap` has not run. |
-| The portal shows nothing on any address | `SITE_ADDRESS` does not match the hostname you typed. Re-run `./install.sh bootstrap`. |
+| "Provision a connector" on a מיכפל action | no connector is registered for this bureau yet — tell us and we will point one at your מיכפל. |
+| A page shows nothing on any address | `SITE_ADDRESS` does not match the hostname you typed. Re-run `./install.sh bootstrap`. |
 | The model refuses a document | `GATEWAY_ATTACHMENTS=block` and OCR could not read the scan. A clearer scan, or set it to `allow` knowingly. |
 | Reminders never send | `./install.sh logs scheduler` — it answers 503 when a job has stopped succeeding. |
 

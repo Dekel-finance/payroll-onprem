@@ -152,14 +152,14 @@
 <div class="bar">
   <div class="mark">Dekel<span>.</span></div>
   <div class="bar-spacer"></div>
-  <div class="ver">v1.1.4</div>
+  <div class="ver">v1.1.6</div>
   <div class="langs" role="group" aria-label="Language">
     <button type="button" id="btn-en" aria-pressed="true">EN</button>
     <button type="button" id="btn-he" aria-pressed="false">עברית</button>
   </div>
 </div>
 <main>
-<div id="lang-en" class="wrap"><header class="hero"><p class="eyebrow">Deployment guide</p><h1>Running the payroll platform on your own infrastructure</h1><p class="lede">The database, the console, the back office, the employee portal and the payroll-system
+<div id="lang-en" class="wrap"><header class="hero"><p class="eyebrow">Deployment guide</p><h1>Running the payroll platform on your own infrastructure</h1><p class="lede">The database, the console, the back office and the payroll-system
    connector, on hardware you control. This document is written for the person who has to
    approve, install and then be accountable for it — not for a demonstration.</p></header><nav class="toc" aria-label="Contents"><h4>Contents</h4><ol><li><a href="#review-en">Summary for a security review</a></li><li><a href="#arch-en">The network boundary</a></li><li><a href="#req-en">Requirements</a></li><li><a href="#install-en">Installation</a></li><li><a href="#keys-en">Key material, and what cannot be recovered</a></li><li><a href="#tls-en">TLS and certificate trust</a></li><li><a href="#access-en">Identity, access, and what we cannot do</a></li><li><a href="#egress-en">Exactly what leaves your network</a></li><li><a href="#updates-en">Updates</a></li><li><a href="#backup-en">Backup and restore</a></li><li><a href="#audit-en">Logging and audit</a></li><li><a href="#connector-en">The payroll-system connector</a></li><li><a href="#ops-en">Operations reference</a></li><li><a href="#trouble-en">Troubleshooting</a></li><li><a href="#limits-en">Limitations, stated plainly</a></li><li><a href="#support-en">Support and escalation</a></li></ol></nav><section class="sec" id="review-en"><span class="sec-n">01</span><h2>Summary for a security review</h2>
 <p>This section answers, in one place, the questions a security review asks first.
@@ -190,7 +190,7 @@ to reach the internet would fail to resolve the name.</p>
     <text class="b-s" x="24" y="30">your building — no route to the internet</text>
     <rect class="b-box" x="30" y="48" width="112" height="38" rx="6"/><text class="b-t" x="48" y="72">Console</text>
     <rect class="b-box" x="30" y="96" width="112" height="38" rx="6"/><text class="b-t" x="55" y="120">Admin</text>
-    <rect class="b-box" x="30" y="144" width="112" height="38" rx="6"/><text class="b-t" x="55" y="168">Portal</text>
+    <rect class="b-box" x="30" y="144" width="112" height="38" rx="6"/><text class="b-t" x="57" y="168">Agent</text>
     <rect class="b-box" x="30" y="192" width="112" height="38" rx="6"/><text class="b-t" x="47" y="216">Database</text>
     <path class="b-l" d="M142 115 H228" stroke-width="1.5" marker-end="url(#a)"/>
     <rect class="b-gate" x="232" y="86" width="120" height="58" rx="8"/>
@@ -210,7 +210,7 @@ to reach the internet would fail to resolve the name.</p>
 <div class="tw"><table>
 <thead><tr><th>Container</th><th>Holds payroll data</th><th>Can reach the internet</th></tr></thead><tbody>
 <tr><td>Database</td><td>yes</td><td>no</td></tr>
-<tr><td>Console, Admin, Portal</td><td>yes</td><td>no</td></tr>
+<tr><td>Console, Admin</td><td>yes</td><td>no</td></tr>
 <tr><td>Agent, Scheduler</td><td>yes</td><td>no</td></tr>
 <tr><td>Gateway</td><td>in transit only</td><td><strong>yes</strong> — the AI vendors, and nothing else</td></tr>
 <tr><td>Telemetry</td><td>no</td><td><strong>yes</strong> — the reporting endpoint you configure</td></tr>
@@ -282,7 +282,7 @@ the backup of this file is your responsibility and nobody else's.</p></div>
 <div class="code"><button class="copy" type="button">Copy</button><pre><span class="c"># copy it somewhere that is not this machine, before going further</span>
 cp .env /secure/offline/location/payroll-env-$(date +%F)</pre></div>
 <div class="warn"><p class="co-h">Never regenerate these two keys</p>
-<p>Regenerating <code>NATIONAL_ID_KEYS</code> or <code>PORTAL_FILE_KEK</code> on
+<p>Regenerating <code>NATIONAL_ID_KEYS</code> on
 an installation that already holds records orphans every identity number and
 every sealed document already written. The rows survive; their contents become
 permanently unreadable.</p></div>
@@ -297,7 +297,7 @@ permanently unreadable.</p></div>
 <div class="tw"><table>
 <thead><tr><th>&nbsp;</th><th>Address</th><th>Used by</th></tr></thead><tbody>
 <tr><td>Console</td><td class="mono">https://&lt;server&gt;:4201</td><td>the payroll office</td></tr>
-<tr><td>Portal</td><td class="mono">https://&lt;server&gt;:4401</td><td>employees</td></tr>
+
 </tbody></table></div>
 <div class="warn"><p class="co-h">Plain HTTP is not a supported configuration</p>
 <p>The applications mark their session cookie <code>Secure</code>, and browsers
@@ -338,11 +338,9 @@ shared account and no vendor account. Sessions are cookie-based, marked
 <thead><tr><th>Application</th><th>Who</th><th>Sees</th></tr></thead><tbody>
 <tr><td>Console</td><td>payroll staff</td><td>clients, employees, runs, payslips</td></tr>
 <tr><td>Admin</td><td>your administrators</td><td>settings, users, connectors, policies</td></tr>
-<tr><td>Portal</td><td>employees of your clients</td><td><strong>only their own</strong> documents and payslips</td></tr>
+
 </tbody></table></div>
-<p>The portal answers only on the hostname registered at install time and refuses
-requests arriving on any other name. An employee cannot reach a colleague's
-payslip, including a colleague with the same name.</p>
+
 <div class="note"><p class="co-h">What the vendor can and cannot do</p>
 <p><strong>We have no access to this installation.</strong> No tunnel, no
 support account, no key, no remote console. We cannot read your data, restart
@@ -358,8 +356,7 @@ allow-list; everything else from this server should be denied.</p>
 <div class="tw"><table>
 <thead><tr><th>Destination</th><th>Why</th><th>Required</th></tr></thead><tbody>
 <tr><td class="mono">dekelmichpalil.azurecr.io</td><td>Software images, at install and update</td><td><strong>Yes</strong></td></tr>
-<tr><td class="mono">api.anthropic.com</td><td>AI vendor, reached only by the gateway</td><td>Only if AI features are enabled</td></tr>
-<tr><td class="mono">api.interfaze.ai</td><td><strong>Second AI vendor</strong>, used for reading documents</td><td>Only if document extraction is enabled</td></tr>
+<tr><td class="mono">broker.dekel.io</td><td>AI, reached only by the gateway</td><td>only with AI features</td></tr>
 <tr><td class="mono">your reporting endpoint</td><td>Aggregate telemetry, if configured</td><td>No — blank means nothing is sent</td></tr>
 </tbody></table></div>
 <div class="warn"><p class="co-h">There are two AI vendors, not one</p>
@@ -407,7 +404,7 @@ cost of unattended security patching on a server nobody logs into. <strong>If
 your security policy does not permit it, that is a legitimate conclusion</strong>
 — set <code>AUTO_UPDATE_MONITOR_ONLY=true</code> and update deliberately.</p></div>
 <div class="code"><button class="copy" type="button">Copy</button><pre>AUTO_UPDATE_MONITOR_ONLY=true   <span class="c"># reports what it would do, changes nothing</span>
-BUNDLE_VERSION=1.1.4            <span class="c"># pin an exact version; updates never fire</span></pre></div>
+BUNDLE_VERSION=1.1.6            <span class="c"># pin an exact version; updates never fire</span></pre></div>
 <p>Either way, <code>./install.sh update</code> applies the current release
 immediately, under your control.</p>
 <h4>Verify that an update actually happened</h4>
@@ -460,11 +457,8 @@ a retention obligation, set it there — we do not override it.</p>
 </section><section class="sec" id="connector-en"><span class="sec-n">12</span><h2>The payroll-system connector</h2>
 <p>Optional. The connector drives your payroll software over RDP on a Windows
 machine on your own network. That traffic never leaves your LAN.</p>
-<div class="code"><button class="copy" type="button">Copy</button><pre>RDP_HOST=10.0.0.20      <span class="c"># the Windows machine</span>
-RDP_USER=...
-RDP_PASS=...
-
-docker compose --profile michpal up -d</pre></div>
+<div class="code"><button class="copy" type="button">Copy</button><pre>MICHPAL_WORKER_URL=https://...  <span class="c"># we send you both</span>
+WORKER_TOKEN=...</pre></div>
 <p>One run at a time, deliberately: a Windows machine gives one interactive
 session per user, and two automations sharing one desktop interfere with each
 other in ways that are expensive to recover from. Plan for a dedicated machine
@@ -499,8 +493,8 @@ configured telemetry, tell us and we will delete what was reported.</p>
 <thead><tr><th>Symptom</th><th>Cause and action</th></tr></thead><tbody>
 <tr><td>The login page returns to itself, no error anywhere</td><td>You are on <code>http://</code>. See §6 — the browser is discarding a <code>Secure</code> cookie</td></tr>
 <tr><td>Browser warns the certificate is untrusted</td><td>The root has not been distributed yet. §6</td></tr>
-<tr><td>"Provision a connector" on a payroll action</td><td><code>RDP_HOST</code> unset, or the connector profile is not running. §12</td></tr>
-<tr><td>The portal shows nothing on any address</td><td><code>SITE_ADDRESS</code> does not match the hostname typed. Re-run <code>./install.sh bootstrap</code></td></tr>
+<tr><td>"Provision a connector" on a payroll action</td><td>No connector is registered for this bureau yet — tell us and we will point one at your payroll system.</td></tr>
+
 <tr><td>A document is refused by the AI step</td><td>Attachments are blocked by default and OCR could not read the scan. Use a clearer scan, or change the setting knowingly. §8</td></tr>
 <tr><td>Reminders never send</td><td><code>./install.sh logs scheduler</code> — it answers 503 when a job has stopped succeeding</td></tr>
 <tr><td>The version never changes after a release</td><td>The updater cannot reach the registry, or is in monitor-only mode. §9 — check the logs, not the absence of errors</td></tr>
@@ -542,7 +536,7 @@ payroll data or key material.</p>
 <p>Because we have no access to your installation, everything we can tell you
 comes from what you send. A screenshot with the client's name blacked out is
 usually enough, and is always better than access we would rather not have.</p>
-</section><footer><p>Document for bundle version 1.1.4. Last updated 24 August 2026. Written and maintained by Dekel.</p></footer></div>
+</section><footer><p>Document for bundle version 1.1.6. Last updated 24 August 2026. Written and maintained by Dekel.</p></footer></div>
 <div id="lang-he" class="wrap" hidden><header class="hero"><p class="eyebrow">מדריך הטמעה</p><h1>הרצת מערכת השכר על התשתית שלכם</h1><p class="lede">מסד הנתונים, הקונסולה, הניהול, פורטל העובדים והמחבר למערכת השכר, על חומרה בשליטתכם.
    המסמך נכתב עבור מי שצריך לאשר, להתקין ואז להיות אחראי לזה — לא עבור הדגמה.</p></header><nav class="toc" aria-label="תוכן העניינים"><h4>תוכן העניינים</h4><ol><li><a href="#review-he">תקציר לביקורת אבטחה</a></li><li><a href="#arch-he">גבול הרשת</a></li><li><a href="#req-he">דרישות מקדימות</a></li><li><a href="#install-he">התקנה</a></li><li><a href="#keys-he">חומר מפתחות, ומה שאי אפשר לשחזר</a></li><li><a href="#tls-he">TLS ואמון בתעודה</a></li><li><a href="#access-he">זהויות, גישה, ומה שאנחנו לא יכולים לעשות</a></li><li><a href="#egress-he">מה בדיוק יוצא מהרשת שלכם</a></li><li><a href="#updates-he">עדכונים</a></li><li><a href="#backup-he">גיבוי ושחזור</a></li><li><a href="#audit-he">יומנים וביקורת</a></li><li><a href="#connector-he">המחבר למערכת השכר</a></li><li><a href="#ops-he">מדריך תפעול</a></li><li><a href="#trouble-he">איתור תקלות</a></li><li><a href="#limits-he">מגבלות, בלשון ברורה</a></li><li><a href="#support-he">תמיכה והסלמה</a></li></ol></nav><section class="sec" id="review-he"><span class="sec-n">01</span><h2>תקציר לביקורת אבטחה</h2>
 <p>הפרק הזה עונה במקום אחד על השאלות שביקורת אבטחה שואלת ראשונות. כל טענה כאן
@@ -656,7 +650,7 @@ cd payroll-onprem
 <div class="code"><button class="copy" type="button">העתק</button><pre><span class="c"># העתיקו למקום שאינו המכונה הזו, לפני שממשיכים</span>
 cp .env /secure/offline/location/payroll-env-$(date +%F)</pre></div>
 <div class="warn"><p class="co-h">לעולם אל תייצרו מחדש את שני המפתחות האלה</p>
-<p>ייצור מחדש של <code>NATIONAL_ID_KEYS</code> או <code>PORTAL_FILE_KEK</code>
+<p>ייצור מחדש של <code>NATIONAL_ID_KEYS</code>
 בהתקנה שכבר מחזיקה רשומות מנתק כל מספר זהות וכל מסמך אטום שכבר נכתבו. השורות
 נשארות; התוכן שלהן הופך לבלתי קריא לצמיתות.</p></div>
 <h4>טיפול מומלץ</h4>
@@ -725,8 +719,7 @@ cp .env /secure/offline/location/payroll-env-$(date +%F)</pre></div>
 <div class="tw"><table>
 <thead><tr><th>יעד</th><th>לשם מה</th><th>הכרחי</th></tr></thead><tbody>
 <tr><td class="mono">dekelmichpalil.azurecr.io</td><td>תמונות התוכנה, בהתקנה ובעדכון</td><td><strong>כן</strong></td></tr>
-<tr><td class="mono">api.anthropic.com</td><td>ספק AI, שאליו ניגש רק השער</td><td>רק אם יכולות ה-AI פעילות</td></tr>
-<tr><td class="mono">api.interfaze.ai</td><td><strong>ספק AI שני</strong>, לקריאת מסמכים</td><td>רק אם חילוץ מסמכים פעיל</td></tr>
+<tr><td class="mono">broker.dekel.io</td><td>AI, reached only by the gateway</td><td>only with AI features</td></tr>
 <tr><td class="mono">נקודת הדיווח שלכם</td><td>טלמטריה מצרפית, אם הוגדרה</td><td>לא — ריק פירושו שלא נשלח דבר</td></tr>
 </tbody></table></div>
 <div class="warn"><p class="co-h">יש שני ספקי AI, לא אחד</p>
@@ -767,7 +760,7 @@ cp .env /secure/offline/location/payroll-env-$(date +%F)</pre></div>
 אליו. <strong>אם מדיניות האבטחה שלכם לא מאפשרת זאת, זו מסקנה לגיטימית</strong> —
 הגדירו <code>AUTO_UPDATE_MONITOR_ONLY=true</code> ועדכנו ביוזמתכם.</p></div>
 <div class="code"><button class="copy" type="button">העתק</button><pre>AUTO_UPDATE_MONITOR_ONLY=true   <span class="c"># מדווח מה היה עושה, לא משנה כלום</span>
-BUNDLE_VERSION=1.1.4            <span class="c"># נעילה לגרסה מדויקת; עדכונים לא ירוצו</span></pre></div>
+BUNDLE_VERSION=1.1.6            <span class="c"># נעילה לגרסה מדויקת; עדכונים לא ירוצו</span></pre></div>
 <p>בכל מקרה, <code>./install.sh update</code> מחיל את הגרסה הנוכחית מיד, בשליטתכם.</p>
 <h4>איך מוודאים שעדכון באמת קרה</h4>
 <p>אל תסיקו זאת מהיעדר שגיאות. מנגנון עדכון שאינו מצליח להגיע למאגר רושם סירוב
@@ -815,11 +808,8 @@ docker compose logs watchtower | tail -20</pre></div>
 </section><section class="sec" id="connector-he"><span class="sec-n">12</span><h2>המחבר למערכת השכר</h2>
 <p>לא חובה. המחבר מפעיל את תוכנת השכר שלכם דרך RDP על מכונת Windows ברשת שלכם.
 התעבורה הזו לא יוצאת מהרשת הפנימית.</p>
-<div class="code"><button class="copy" type="button">העתק</button><pre>RDP_HOST=10.0.0.20      <span class="c"># מכונת ה-Windows</span>
-RDP_USER=...
-RDP_PASS=...
-
-docker compose --profile michpal up -d</pre></div>
+<div class="code"><button class="copy" type="button">העתק</button><pre>MICHPAL_WORKER_URL=https://...  <span class="c"># we send you both</span>
+WORKER_TOKEN=...</pre></div>
 <p>הרצה אחת בכל רגע, במכוון: מכונת Windows נותנת סשן אינטראקטיבי אחד למשתמש, ושתי
 אוטומציות שחולקות שולחן עבודה אחד מפריעות זו לזו באופן שיקר לתקן. תכננו מכונה
 ייעודית או חשבון ייעודי.</p>
@@ -852,7 +842,7 @@ docker compose --profile michpal up -d</pre></div>
 <thead><tr><th>תסמין</th><th>סיבה ופעולה</th></tr></thead><tbody>
 <tr><td>דף ההתחברות חוזר לעצמו, בלי שגיאה בשום מקום</td><td>אתם על <code>http://</code>. ראו פרק 6 — הדפדפן משליך עוגיית <code>Secure</code></td></tr>
 <tr><td>הדפדפן מזהיר שהתעודה אינה מהימנה</td><td>אישור השורש עדיין לא הופץ. פרק 6</td></tr>
-<tr><td>״להקצות מחבר״ בפעולת שכר</td><td><code>RDP_HOST</code> לא מוגדר, או שפרופיל המחבר אינו רץ. פרק 12</td></tr>
+<tr><td>״להקצות מחבר״ בפעולת שכר</td><td>עדיין לא הוקצה מחבר ללשכה הזו — פנו אלינו.</td></tr>
 <tr><td>הפורטל לא מציג כלום בשום כתובת</td><td><code>SITE_ADDRESS</code> לא תואם לשם שהוקלד. הריצו שוב <code>./install.sh bootstrap</code></td></tr>
 <tr><td>מסמך נדחה בשלב ה-AI</td><td>צירופי קבצים חסומים כברירת מחדל וה-OCR לא קרא את הסריקה. סריקה ברורה יותר, או שינוי מודע של ההגדרה. פרק 8</td></tr>
 <tr><td>תזכורות לא נשלחות</td><td><code>./install.sh logs scheduler</code> — הוא מחזיר 503 כשמשימה הפסיקה להצליח</td></tr>
@@ -893,7 +883,7 @@ docker compose --profile michpal up -d</pre></div>
 <p>מכיוון שאין לנו גישה להתקנה שלכם, כל מה שנוכל לומר מגיע ממה שתשלחו. צילום מסך
 עם שם הלקוח מושחר בדרך כלל מספיק, ותמיד עדיף על גישה שאנחנו מעדיפים שלא תהיה
 לנו.</p>
-</section><footer><p>מסמך לגרסת חבילה 1.1.4. עודכן לאחרונה ב-24 באוגוסט 2026. נכתב ומתוחזק על ידי דקל.</p></footer></div>
+</section><footer><p>מסמך לגרסת חבילה 1.1.6. עודכן לאחרונה ב-24 באוגוסט 2026. נכתב ומתוחזק על ידי דקל.</p></footer></div>
 </main>
 <script>
   (function () {
