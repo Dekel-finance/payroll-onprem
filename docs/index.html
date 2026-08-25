@@ -571,10 +571,14 @@ are the things this deployment does not do, or does not yet do well.</p>
 <li><strong>Calibration against your payroll software is unproven until we do it.</strong>
 The automation recognises screens by their pixels, measured against our
 installation. Yours is a variable we have not had. §12.</li>
-<li><strong>Inbound email does not reach this installation.</strong> A deployment
-with no inbound path cannot receive a webhook. Features that begin with a client
-emailing you are not available on-premise today; we are building the outbound
-path for it and will not pretend it exists meanwhile.</li>
+<li><strong>Your office's inbound address is allocated by us, not by the
+installer.</strong> Mail now reaches this installation — the gateway polls for
+it, and each message is sealed to a key generated on this machine and held
+nowhere else, so nothing connects inward and nothing parked on our side is
+readable by us. What the installer cannot do is invent the address itself: it
+lives on a domain we host and routing it is our half of the arrangement. Until
+we allocate one, the office settings screen says no address has been assigned.
+Ask us and it appears on that screen on its own, without a reinstall.</li>
 <li><strong>OCR quality on real scanned documents is not measured.</strong> It is
 verified against clean renders. A photographed, skewed or low-contrast scan is a
 different problem, and what OCR cannot read is refused rather than guessed.</li>
@@ -955,9 +959,13 @@ WORKER_TOKEN=...</pre></div>
 <li><strong>הכיול מול תוכנת השכר שלכם אינו מוכח עד שנבצע אותו.</strong>
 האוטומציה מזהה מסכים לפי הפיקסלים שלהם, שנמדדו מול ההתקנה שלנו. שלכם הוא נעלם
 שלא היה לנו. פרק 12.</li>
-<li><strong>דוא״ל נכנס אינו מגיע להתקנה הזו.</strong> הטמעה בלי מסלול נכנס אינה
-יכולה לקבל webhook. יכולות שמתחילות בכך שלקוח שולח לכם מייל אינן זמינות מקומית
-היום; אנחנו בונים עבורן מסלול יוצא, ולא נעמיד פנים שהן קיימות בינתיים.</li>
+<li><strong>כתובת הדוא״ל של המשרד מוקצית על ידינו, לא על ידי ההתקנה.</strong>
+דואר נכנס כן מגיע להתקנה: השער מושך אותו, וכל הודעה חתומה למפתח שנוצר על המכונה
+הזו ואינו קיים בשום מקום אחר — כך שאיש אינו מתחבר פנימה, ומה שממתין אצלנו אינו
+קריא לנו. מה שההתקנה אינה יכולה לעשות הוא להמציא את הכתובת בעצמה: היא יושבת על
+דומיין שאנחנו מארחים והניתוב שלה הוא הצד שלנו בהסדר. עד שנקצה כתובת, מסך ההגדרות
+של המשרד יציג שטרם הוקצתה כתובת. אחרי שנקצה, היא מופיעה שם מעצמה — בלי התקנה
+מחדש.</li>
 <li><strong>איכות ה-OCR על מסמכים סרוקים אמיתיים לא נמדדה.</strong> היא מאומתת
 מול המרות נקיות. סריקה מצולמת, נטויה או בניגודיות נמוכה היא בעיה אחרת, ומה
 שה-OCR לא מצליח לקרוא נדחה ולא מנוחש.</li>

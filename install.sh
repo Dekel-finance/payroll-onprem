@@ -113,6 +113,18 @@ cmd_check() {
 
 rand_hex() { openssl rand -hex 32; }
 
+# This install's mail keypair — the private half, and it is generated HERE.
+#
+# The arrangement it makes possible: we hold only the public half, so a message
+# parked on our side for this install is sealed to a key we do not have. That is
+# a property of where the key was made, not a promise about our conduct, and it
+# only holds if the key is never generated anywhere but on this machine.
+#
+# An x25519 private key in DER is a 16-byte PKCS#8 preamble followed by the 32
+# bytes that matter; `tail -c 32` takes the second part. base64url because the
+# value has to survive being a line in a `.env` file.
+rand_x25519() { openssl genpkey -algorithm x25519 -outform DER | tail -c 32 | openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+
 # ── Secrets ──────────────────────────────────────────────────────────────────
 #
 # Written once. Two of them seal data at rest, and regenerating either turns
@@ -151,6 +163,22 @@ METRICS_CONTROL_PLANE_URL=
 METRICS_INSTALL_TOKEN=${INSTALL_TOKEN:-}
 MODEL_BROKER_URL=
 MODEL_BROKER_TOKEN=${INSTALL_TOKEN:-}
+
+# Inbound and outbound email, through the same door as everything else.
+#
+# `relay` is the default and not a decision we ask you to make, because `off` is
+# not a smaller version of this install — it is one where the office has no
+# address clients can write to AND no invitation email can be sent, including
+# the one that adds your second member of staff. There is still no inbound hole:
+# nothing connects to this machine. The gateway polls for mail it can open, and
+# only it can open it.
+#
+# MAIL_INSTALL_PRIVATE_KEY is generated on this machine and never leaves it. Its
+# public half is derived and published by the gateway at boot; we are told that
+# half and nothing else. Losing this key makes every message parked for this
+# install permanently unreadable — back it up with NATIONAL_ID_KEYS.
+MAIL_INBOUND_MODE=${MAIL_INBOUND_MODE:-relay}
+MAIL_INSTALL_PRIVATE_KEY=$(rand_x25519)
 
 # ── Fill these in ────────────────────────────────────────────────────────────
 
@@ -276,6 +304,16 @@ cmd_bootstrap() {
     -e FIRST_USER_EMAIL="$email" \
     -e FIRST_USER_PASSWORD="$pass" \
     console node /app/register-install.mjs
+
+  # The credential check, in the container that will actually make the call.
+  #
+  # The console is on `internal` only and cannot reach the internet, so a check
+  # run there answered "could not reach" on every healthy install — an alarming
+  # message shown to people whose firewall was fine. The gateway is the one
+  # container with a route out, and it is the one that polls for mail, so this
+  # tests the real path.
+  dc cp verify-install.mjs gateway:/app/verify-install.mjs >/dev/null
+  dc exec -T gateway node /app/verify-install.mjs
 }
 
 cmd_status() {

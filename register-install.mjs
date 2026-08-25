@@ -142,85 +142,20 @@ if (FIRST_EMAIL && FIRST_PASSWORD) {
 }
 
 /*
- * The credential check, last — after the install is otherwise usable.
+ * The credential check does NOT run here — see `verify-install.mjs`.
  *
- * ## Why this runs at all
+ * It used to, and it was wrong every single time. This script runs inside the
+ * `console` container, which is attached to the `internal` network only and
+ * therefore has no route to the internet at all — by design, and the whole
+ * containment argument rests on it. So the check could not reach us, said
+ * "could not reach", and told every correctly-installed bureau that their
+ * firewall was blocking something. A check that cannot look must never report
+ * a verdict, and this one reported the alarming one.
  *
- * `METRICS_INSTALL_TOKEN` is what this box uses for two things: pushing its
- * health to us, and **collecting its inbound mail**. Both fail with a 401 that
- * nothing surfaces — the metrics container logs it every fifteen minutes and
- * the mail poll simply returns nothing, so a wrong token looks exactly like a
- * quiet week. One install ran for weeks that way before anybody noticed.
- *
- * So the token is exercised here, once, while somebody is still watching the
- * terminal. It is the difference between "you pasted the wrong value" and "the
- * customer's email stopped arriving and nobody knows why".
- *
- * ## Why it does not fail the install
- *
- * This is deliberately a WARNING, not an exit code. Nothing on this box needs
- * our permission to run payroll, and an install that refused to finish because
- * a firewall had not been opened yet would be a bureau unable to pay salaries
- * over a network rule. Authorization, where it is wanted, belongs on our side
- * of a call — see the broker's entitlements — not in a setup script the
- * customer administers.
+ * The check now runs in the `gateway` container, which is the container that
+ * will actually do the talking. That makes it a test of the real path rather
+ * than of a path nothing uses.
  */
-async function verifyControlPlane() {
-  const id = (process.env.METRICS_INSTALL_ID ?? "").trim();
-  const token = (process.env.METRICS_INSTALL_TOKEN ?? "").trim();
-  // Same resolution the metrics container uses: the address is compiled in, so
-  // an operator who set nothing still gets checked against the real thing.
-  const raw = (process.env.METRICS_CONTROL_PLANE_URL ?? "").trim();
-  if (raw.toLowerCase() === "off") {
-    console.log("\ncontrol plane: opted out (METRICS_CONTROL_PLANE_URL=off) — this install will not report");
-    return;
-  }
-  const base = (raw || "https://dekel.sh/api").replace(/\/+$/, "");
-
-  if (!id || !token) {
-    console.log(`\n⚠ no METRICS_INSTALL_${!id ? "ID" : "TOKEN"} — this install will not report its health,`);
-    console.log("  and it will not receive any inbound email. Ask us for both, put them in .env,");
-    console.log("  and re-run this script.");
-    return;
-  }
-
-  // The mail endpoint rather than the snapshot one: it is the same credential
-  // and the same registry, but a GET that parks nothing, so a verification does
-  // not write a row that looks like a real push.
-  const url = `${base}/v1/installs/${encodeURIComponent(id)}/mail?after=0&wait=0`;
-  let res;
-  try {
-    res = await fetch(url, {
-      headers: { authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(20_000),
-    });
-  } catch (err) {
-    console.log(`\n⚠ could not reach ${base} — ${err.message}`);
-    console.log("  The install works, but it cannot report health or collect email until this host");
-    console.log("  can make outbound HTTPS requests. Check the firewall, then re-run this script.");
-    return;
-  }
-
-  if (res.ok) {
-    console.log(`\n✓ control plane: ${id} verified at ${base}`);
-    console.log("  Health reporting and inbound email are live.");
-    return;
-  }
-  if (res.status === 401) {
-    console.log(`\n✗ control plane REFUSED this install (401).`);
-    console.log(`  Either "${id}" is not an install we know, or the token does not match it.`);
-    console.log("  Both come from us as a pair — check METRICS_INSTALL_ID and METRICS_INSTALL_TOKEN.");
-    return;
-  }
-  if (res.status === 403) {
-    console.log(`\n✗ control plane says this install is SUSPENDED (403).`);
-    console.log("  That is deliberate on our side, not a configuration error. Contact us.");
-    return;
-  }
-  console.log(`\n⚠ control plane answered ${res.status} — health and email may not work. Re-run to retry.`);
-}
-
-await verifyControlPlane();
 
 console.log("\nThe install is empty by design: no organizations, no employees, no payslips.");
 await client.close();
