@@ -152,7 +152,7 @@
 <div class="bar">
   <div class="mark">Dekel<span>.</span></div>
   <div class="bar-spacer"></div>
-  <div class="ver">v1.1.6</div>
+  <div class="ver" data-release="v">v1.1.8</div>
   <div class="langs" role="group" aria-label="Language">
     <button type="button" id="btn-en" aria-pressed="true">EN</button>
     <button type="button" id="btn-he" aria-pressed="false">עברית</button>
@@ -469,7 +469,7 @@ cost of unattended security patching on a server nobody logs into. <strong>If
 your security policy does not permit it, that is a legitimate conclusion</strong>
 — set <code>AUTO_UPDATE_MONITOR_ONLY=true</code> and update deliberately.</p></div>
 <div class="code"><button class="copy" type="button">Copy</button><pre>AUTO_UPDATE_MONITOR_ONLY=true   <span class="c"># reports what it would do, changes nothing</span>
-BUNDLE_VERSION=1.1.6            <span class="c"># pin an exact version; updates never fire</span></pre></div>
+BUNDLE_VERSION=<span data-release="plain">1.1.8</span>            <span class="c"># pin an exact version; updates never fire</span></pre></div>
 <p>Either way, <code>./install.sh update</code> applies the current release
 immediately, under your control.</p>
 <h4>Verify that an update actually happened</h4>
@@ -601,7 +601,7 @@ payroll data or key material.</p>
 <p>Because we have no access to your installation, everything we can tell you
 comes from what you send. A screenshot with the client's name blacked out is
 usually enough, and is always better than access we would rather not have.</p>
-</section><footer><p>Document for bundle version 1.1.6. Last updated 24 August 2026. Written and maintained by Dekel.</p></footer></div>
+</section><footer><p>Document for bundle version <span data-release="plain">1.1.8</span>. Last updated 24 August 2026. Written and maintained by Dekel.</p></footer></div>
 <div id="lang-he" class="wrap" hidden><header class="hero"><p class="eyebrow">מדריך הטמעה</p><h1>הרצת מערכת השכר על התשתית שלכם</h1><p class="lede">מסד הנתונים, הקונסולה, הניהול והסוכן האוטומטי, על חומרה בשליטתכם.
    המסמך נכתב עבור מי שצריך לאשר, להתקין ואז להיות אחראי לזה — לא עבור הדגמה.</p></header><nav class="toc" aria-label="תוכן העניינים"><h4>תוכן העניינים</h4><ol><li><a href="#review-he">תקציר לביקורת אבטחה</a></li><li><a href="#arch-he">גבול הרשת</a></li><li><a href="#req-he">דרישות מקדימות</a></li><li><a href="#install-he">התקנה</a></li><li><a href="#keys-he">חומר מפתחות, ומה שאי אפשר לשחזר</a></li><li><a href="#tls-he">TLS ואמון בתעודה</a></li><li><a href="#access-he">זהויות, גישה, ומה שאנחנו לא יכולים לעשות</a></li><li><a href="#egress-he">מה בדיוק יוצא מהרשת שלכם</a></li><li><a href="#updates-he">עדכונים</a></li><li><a href="#backup-he">גיבוי ושחזור</a></li><li><a href="#audit-he">יומנים וביקורת</a></li><li><a href="#connector-he">המחבר למערכת השכר</a></li><li><a href="#ops-he">מדריך תפעול</a></li><li><a href="#trouble-he">איתור תקלות</a></li><li><a href="#limits-he">מגבלות, בלשון ברורה</a></li><li><a href="#support-he">תמיכה והסלמה</a></li></ol></nav><section class="sec" id="review-he"><span class="sec-n">01</span><h2>תקציר לביקורת אבטחה</h2>
 <p>הפרק הזה עונה במקום אחד על השאלות שביקורת אבטחה שואלת ראשונות. כל טענה כאן
@@ -860,7 +860,7 @@ sudo ufw status</pre></div>
 אליו. <strong>אם מדיניות האבטחה שלכם לא מאפשרת זאת, זו מסקנה לגיטימית</strong> —
 הגדירו <code>AUTO_UPDATE_MONITOR_ONLY=true</code> ועדכנו ביוזמתכם.</p></div>
 <div class="code"><button class="copy" type="button">העתק</button><pre>AUTO_UPDATE_MONITOR_ONLY=true   <span class="c"># reports what it would do, changes nothing</span>
-BUNDLE_VERSION=1.1.6            <span class="c"># pin an exact version; updates never fire</span></pre></div>
+BUNDLE_VERSION=<span data-release="plain">1.1.8</span>            <span class="c"># pin an exact version; updates never fire</span></pre></div>
 <p>בכל מקרה, <code>./install.sh update</code> מחיל את הגרסה הנוכחית מיד, בשליטתכם.</p>
 <h4>איך מוודאים שעדכון באמת קרה</h4>
 <p>אל תסיקו זאת מהיעדר שגיאות. מנגנון עדכון שאינו מצליח להגיע למאגר רושם סירוב
@@ -983,7 +983,7 @@ WORKER_TOKEN=...</pre></div>
 <p>מכיוון שאין לנו גישה להתקנה שלכם, כל מה שנוכל לומר מגיע ממה שתשלחו. צילום מסך
 עם שם הלקוח מושחר בדרך כלל מספיק, ותמיד עדיף על גישה שאנחנו מעדיפים שלא תהיה
 לנו.</p>
-</section><footer><p>מסמך לגרסת חבילה 1.1.6. עודכן לאחרונה ב-24 באוגוסט 2026. נכתב ומתוחזק על ידי דקל.</p></footer></div>
+</section><footer><p>מסמך לגרסת חבילה <span data-release="plain">1.1.8</span>. עודכן לאחרונה ב-24 באוגוסט 2026. נכתב ומתוחזק על ידי דקל.</p></footer></div>
 </main>
 <script>
   (function () {
@@ -1014,6 +1014,35 @@ WORKER_TOKEN=...</pre></div>
         });
       });
     });
+  })();
+
+  /*
+   * The version this document is about, asked rather than typed.
+   *
+   * It used to be five hard-coded strings, and they said 1.1.6 for as long as
+   * nobody remembered to edit them — a guide telling a customer's IT department
+   * the wrong thing about the software they are about to install. The answer
+   * comes from the registry, through the same resolver the fleet dashboard uses,
+   * so the document and the dashboard cannot disagree.
+   *
+   * The text in the markup is the fallback and is deliberately a real version
+   * rather than a placeholder: a reader whose network blocks this request, or
+   * who saved the page, still sees a version that once shipped instead of a
+   * blank or a spinner. This is a document, and it has to be readable offline.
+   */
+  (function () {
+    var els = document.querySelectorAll('[data-release]');
+    if (!els.length || !window.fetch) return;
+    fetch('https://dekel.sh/api/v1/release', { mode: 'cors' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (body) {
+        var v = body && body.data && body.data.version;
+        if (!v) return;
+        Array.prototype.forEach.call(els, function (el) {
+          el.textContent = el.getAttribute('data-release') === 'v' ? 'v' + v : v;
+        });
+      })
+      .catch(function () { /* the fallback text is already correct enough */ });
   })();
 </script>
 </body>

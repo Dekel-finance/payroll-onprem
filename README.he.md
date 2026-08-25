@@ -11,7 +11,7 @@
 החוצה כלל — לא בגלל מדיניות אלא במבנה: קריאה שתעקוף את השער פשוט לא תצליח
 להתחבר.
 
-[English](README.md) · [מדריך מאויר](https://onprem.dekel.io) · גרסה 1.1.6
+[English](README.md) · [מדריך מאויר](https://onprem.dekel.io) · גרסה 1.1.8
 
 ---
 
@@ -175,7 +175,7 @@ sudo ufw allow 80/tcp
 
 ```bash
 AUTO_UPDATE_MONITOR_ONLY=true   # reports what it would do, changes nothing
-BUNDLE_VERSION=1.1.6            # pin an exact version; updates never fire
+BUNDLE_VERSION=1.1.8            # pin an exact version; updates never fire
 ```
 
 בשני המקרים `./install.sh update` מחיל את הגרסה הנוכחית מיד.
