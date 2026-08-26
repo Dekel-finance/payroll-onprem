@@ -169,11 +169,11 @@ checkable on your own machine rather than taken on trust.</p>
 <thead><tr><th>Question</th><th>Answer</th></tr></thead><tbody>
 <tr><td>Where does payroll data live</td><td><strong>On this server only.</strong> No employee, payslip or client record is stored on our infrastructure.</td></tr>
 <tr><td>Inbound connections</td><td><strong>None.</strong> No firewall rule, no published port, no public DNS record, no VPN.</td></tr>
-<tr><td>Outbound connections</td><td>Up to <strong>four</strong> destinations over HTTPS, listed in §8. One is required; the rest are features you can decline.</td></tr>
+<tr><td>Outbound connections</td><td>Up to <strong>four</strong> destinations over HTTPS, listed in §8. Two are required — the image registry and our control plane; the rest are features you can decline.</td></tr>
 <tr><td>Can the vendor reach this machine</td><td><strong>No.</strong> There is no tunnel, no remote-support channel and no credential of ours on the server. If you want us to see something, you send it.</td></tr>
 <tr><td>Data at rest</td><td>Employee documents and national identity numbers are encrypted with keys generated on this machine at install time and held only by you.</td></tr>
 <tr><td>Data sent to an AI vendor</td><td>Pseudonymized text only, through a single process that cannot be bypassed. Documents are converted to text <em>on this server</em>. Attachments are refused by default.</td></tr>
-<tr><td>Telemetry</td><td>Counts, durations and hashes, checked against an allow-list immediately before sending. Leave the values blank and nothing is sent at all.</td></tr>
+<tr><td>Telemetry</td><td>Counts, durations and hashes, checked against an allow-list immediately before sending — no name, document or error text can pass. Part of the installation: the same credential reports its health and collects your inbound email.</td></tr>
 <tr><td>Privileges</td><td>Application containers run as an unprivileged user. <strong>The automatic updater requires access to the Docker socket</strong> — see §9 before deciding.</td></tr>
 <tr><td>Deletion</td><td>Stop the stack and delete its volumes. Nothing of yours remains anywhere else.</td></tr>
 <tr><td>Subprocessors</td><td>Named in §8. There are more than one, and a review that only asks about the obvious one is not finished.</td></tr>
@@ -213,7 +213,7 @@ to reach the internet would fail to resolve the name.</p>
 <tr><td>Console, Admin</td><td>yes</td><td>no</td></tr>
 <tr><td>Agent, Scheduler</td><td>yes</td><td>no</td></tr>
 <tr><td>Gateway</td><td>in transit only</td><td><strong>yes</strong> — the AI vendors, and nothing else</td></tr>
-<tr><td>Telemetry</td><td>no</td><td><strong>yes</strong> — the reporting endpoint you configure</td></tr>
+<tr><td>Telemetry</td><td>no</td><td><strong>yes</strong> — our control plane, <span class="mono">dekel.sh</span></td></tr>
 <tr><td>Web front end</td><td>no</td><td><strong>yes</strong> — only to obtain a public certificate, if you use one</td></tr>
 <tr><td>Updater</td><td>no</td><td><strong>yes</strong> — the image registry</td></tr>
 </tbody></table></div>
@@ -223,11 +223,23 @@ docker compose exec console node -e "fetch('https://example.com').catch(e=>{cons
 </section><section class="sec" id="req-en"><span class="sec-n">03</span><h2>Requirements</h2>
 <div class="tw"><table>
 <thead><tr><th>&nbsp;</th><th>Minimum</th><th>Recommended</th></tr></thead><tbody>
-<tr><td>CPU</td><td class="num">4 cores</td><td class="num">8 cores</td></tr>
+<tr><td>CPU</td><td class="num">4 cores, <strong>with AVX</strong></td><td class="num">8 cores</td></tr>
 <tr><td>Memory</td><td class="num">8 GB</td><td class="num">16 GB</td></tr>
 <tr><td>Disk</td><td class="num">40 GB free</td><td class="num">100 GB SSD</td></tr>
 <tr><td>OS</td><td>Linux, Docker Engine 24+, Compose v2.20+</td><td>Ubuntu 22.04 / 24.04 LTS</td></tr>
 </tbody></table></div>
+<div class="warn"><p class="co-h">AVX is a hard requirement, not a performance note</p>
+<p>MongoDB 5.0 and later are compiled with AVX instructions. A CPU without them
+does not run the database slowly — it does not run it at all. The container
+exits at startup saying <code>WARNING: MongoDB 5.0+ requires a CPU with AVX
+support, and your current system does not appear to have that!</code>, which is
+easy to lose in the install output and leaves every other container healthy.</p>
+<p>Every server CPU since about 2011 has AVX, so this is almost never the
+hardware. It is a virtual machine presenting a generic CPU model —
+<code>qemu64</code>, <code>kvm64</code>, an old Hyper-V compatibility level —
+that masks the flag the host really has. Set the guest CPU model to
+<code>host</code> or <code>host-passthrough</code>. <code>./install.sh check</code>
+tests for this before anything is written.</p></div>
 <h4>Ports</h4>
 <div class="tw"><table>
 <thead><tr><th>Direction</th><th>Port</th><th>Between</th></tr></thead><tbody>
@@ -243,7 +255,7 @@ stays closed.</p>
 <ul>
 <li>A hostname staff will type. A private name such as <code>payroll.office.local</code> is fine and is the normal case.</li>
 <li>Whether AI-assisted features are in scope for you at all (§8). They can be switched off entirely, and the payroll automation still runs.</li>
-<li>Who the first administrator is — an email address and a password, set during installation.</li>
+<li>Nothing about the first user. The installer generates an address and a password and prints them; you rename the account from inside the console afterwards.</li>
 <li>Where the key file will be backed up to (§5). Decide this <em>before</em> installing.</li>
 </ul>
 </section><section class="sec" id="install-en"><span class="sec-n">04</span><h2>Installation</h2>
@@ -260,9 +272,20 @@ outbound destinations resolve, and that the ports are free. Anything marked
 <strong>install token</strong>. They are not optional, and they are the only
 values we send you — the installer generates everything else itself.</p>
 <div class="code"><button class="copy" type="button">Copy</button><pre>INSTALL_ID=&lt;the id we sent&gt; INSTALL_TOKEN=&lt;the token we sent&gt; ./install.sh install</pre></div>
-<p>It asks for the first administrator's email and password, then prints the
-addresses to open. Running it again is safe: it repairs an incomplete install
-rather than starting a second one.</p>
+<p>It asks you nothing. The first user's address and password are generated,
+written into <code>.env</code>, and printed as the installer's last lines:</p>
+<div class="code"><pre>▸ Sign in
+
+  Console   https://payroll.acme.local
+
+  Email     admin@payroll.acme.local
+  Password  7fQx-2mVd-9Ktp
+
+  Change the password after the first sign-in.
+  Both are also in .env — back that file up off this machine.</pre></div>
+<p>Set <code>FIRST_USER_EMAIL</code> and <code>FIRST_USER_PASSWORD</code> before
+installing to choose your own. Running the installer again is safe: it repairs
+an incomplete install rather than starting a second one.</p>
 <div class="note"><p class="co-h">One token, two jobs</p>
 <p>That token is what lets this installation <strong>report its health to us</strong>
 and <strong>collect your inbound email</strong>. Without it the software runs
@@ -411,7 +434,8 @@ shared account and no vendor account. Sessions are cookie-based, marked
 support account, no key, no remote console. We cannot read your data, restart
 your services or push a configuration change. If you want us to investigate
 something, you send us what you choose to send. The one thing that reaches us
-without you acting is the telemetry in §8, and you can switch that off.</p></div>
+without you acting is the telemetry in §8 — counts and hashes, never content,
+and §8 says exactly what it may contain.</p></div>
 <h4>What to do about a departing employee</h4>
 <p>Disable the account in Admin. Also review §5 — if that person held the only
 copy of the key file, obtain it before their access ends.</p>
@@ -422,7 +446,7 @@ allow-list; everything else from this server should be denied.</p>
 <thead><tr><th>Destination</th><th>Why</th><th>Required</th></tr></thead><tbody>
 <tr><td class="mono">dekelmichpalil.azurecr.io</td><td>Software images, at install and update</td><td><strong>Yes</strong></td></tr>
 <tr><td class="mono">broker.dekel.io</td><td>AI, reached only by the gateway</td><td>only with AI features</td></tr>
-<tr><td class="mono">your reporting endpoint</td><td>Aggregate telemetry, if configured</td><td>No — blank means nothing is sent</td></tr>
+<tr><td class="mono">dekel.sh</td><td>Aggregate telemetry, and this installation collects your inbound email over the same connection</td><td><strong>Yes</strong></td></tr>
 </tbody></table></div>
 <div class="warn"><p class="co-h">There are two AI vendors, not one</p>
 <p>Document reading — attendance sheets, payslips, forms, contracts — runs
@@ -437,11 +461,14 @@ replaced by placeholders and restored in the answer. Documents are converted to
 text <em>on this server</em>; only the pseudonymized text crosses. Anything OCR
 cannot read is refused rather than forwarded. Attachments are
 <strong>blocked by default</strong> — the setting is yours to change knowingly.</li>
-<li><strong>Telemetry</strong>, if you configure it: counts, durations, error
-codes and hashed identifiers, checked against an allow-list immediately before
-sending, so anything that is not a number, timestamp, hash or known code is
-refused by construction. <code>GET /snapshot</code> on the telemetry service
-shows you exactly what would be sent, before it is sent.</li>
+<li><strong>Telemetry</strong>: counts, durations, error codes and hashed
+identifiers, checked against an allow-list immediately before sending, so
+anything that is not a number, timestamp, hash or known code is refused by
+construction. <code>GET /snapshot</code> on the telemetry service shows you
+exactly what would be sent, before it is sent. This is part of the installation
+rather than a setting — the one credential we send you both reports this
+installation's health and collects your inbound email, so an installation that
+reported nothing would also be one whose clients' mail never arrived.</li>
 <li><strong>Image downloads</strong> at install and update. No payload of yours.</li>
 </ol>
 <h4>Turning the AI off entirely</h4>
@@ -551,8 +578,8 @@ date for it in advance than discover it during your month-end.</p></div>
 </tbody></table></div>
 <h4>Complete removal</h4>
 <div class="code"><button class="copy" type="button">Copy</button><pre>docker compose down -v   <span class="c"># stops everything and deletes the data volumes</span></pre></div>
-<p>Nothing of yours exists anywhere else, so this is the whole of it. If you had
-configured telemetry, tell us and we will delete what was reported.</p>
+<p>Nothing of yours exists anywhere else, so this is the whole of it. Tell us
+when you do it and we will delete what this installation reported.</p>
 </section><section class="sec" id="trouble-en"><span class="sec-n">14</span><h2>Troubleshooting</h2>
 <div class="tw"><table>
 <thead><tr><th>Symptom</th><th>Cause and action</th></tr></thead><tbody>
@@ -618,10 +645,10 @@ usually enough, and is always better than access we would rather not have.</p>
 <tr><td>האם הספק יכול להגיע למכונה</td><td><strong>לא.</strong> אין מנהרה, אין ערוץ תמיכה מרחוק ואין שום פרט גישה שלנו על השרת. אם תרצו שנראה משהו — אתם שולחים אותו.</td></tr>
 <tr><td>נתונים במנוחה</td><td>מסמכי עובדים ומספרי תעודת זהות מוצפנים במפתחות שנוצרו על המכונה הזו בזמן ההתקנה ונמצאים רק אצלכם.</td></tr>
 <tr><td>מה נשלח לספק ה-AI</td><td>טקסט מפוסבד בלבד, דרך תהליך יחיד שאי אפשר לעקוף. מסמכים מומרים לטקסט <em>על השרת הזה</em>. צירופי קבצים נדחים כברירת מחדל.</td></tr>
-<tr><td>טלמטריה</td><td>ספירות, משכי זמן וגיבובים, שנבדקים מול רשימת היתר רגע לפני השליחה. משאירים את הערכים ריקים — ולא נשלח דבר.</td></tr>
+<tr><td>טלמטריה</td><td>מונים, משכי זמן וגיבובים, שנבדקים מול רשימת היתר מיד לפני השליחה — שם, מסמך או טקסט שגיאה אינם יכולים לעבור. חלק מההתקנה: אותו אסימון עצמו מדווח על תקינותה וגם אוסף את הדואר הנכנס שלכם.</td></tr>
 <tr><td>הרשאות</td><td>קונטיינרי האפליקציה רצים כמשתמש לא מורשה. <strong>מנגנון העדכון האוטומטי דורש גישה ל-Docker socket</strong> — קראו את פרק 9 לפני שתחליטו.</td></tr>
 <tr><td>מחיקה</td><td>עוצרים את המערכת ומוחקים את הנפחים. שום דבר משלכם לא נשאר במקום אחר.</td></tr>
-<tr><td>קבלני משנה</td><td>מפורטים בפרק 8. יש יותר מאחד, וביקורת ששואלת רק על המובן מאליו לא סיימה.</td></tr>
+<tr><td>חיבורים יוצאים</td><td>עד <strong>ארבעה</strong> יעדים ב-HTTPS, המפורטים בפרק 8. שניים הם חובה — מאגר התמונות ומערכת הבקרה שלנו; השאר הם יכולות שאפשר לוותר עליהן.</td></tr>
 </tbody></table></div>
 </section><section class="sec" id="arch-he"><span class="sec-n">02</span><h2>גבול הרשת</h2>
 <p>עשרה קונטיינרים על מכונה אחת. ששת אלה שמחזיקים את הנתונים שלכם יושבים על רשת
@@ -657,7 +684,7 @@ Docker המוגדרת <em>internal</em>, כלומר מנוע Docker לא מתק�
 <tr><td>קונסולה וניהול</td><td>כן</td><td>לא</td></tr>
 <tr><td>סוכן, מתזמן</td><td>כן</td><td>לא</td></tr>
 <tr><td>שער</td><td>במעבר בלבד</td><td><strong>כן</strong> — ספקי ה-AI, ולא יותר</td></tr>
-<tr><td>טלמטריה</td><td>לא</td><td><strong>כן</strong> — נקודת הדיווח שתגדירו</td></tr>
+<tr><td>טלמטריה</td><td>לא</td><td><strong>כן</strong> — מערכת הבקרה שלנו, <span class="mono">dekel.sh</span></td></tr>
 <tr><td>שרת הווב</td><td>לא</td><td><strong>כן</strong> — רק להנפקת תעודה ציבורית, אם בחרתם בכך</td></tr>
 <tr><td>מנגנון העדכון</td><td>לא</td><td><strong>כן</strong> — מאגר התמונות</td></tr>
 </tbody></table></div>
@@ -667,11 +694,22 @@ docker compose exec console node -e "fetch('https://example.com').catch(e=>{cons
 </section><section class="sec" id="req-he"><span class="sec-n">03</span><h2>דרישות מקדימות</h2>
 <div class="tw"><table>
 <thead><tr><th>&nbsp;</th><th>מינימום</th><th>מומלץ</th></tr></thead><tbody>
-<tr><td>מעבד</td><td class="num">4 ליבות</td><td class="num">8 ליבות</td></tr>
+<tr><td>מעבד</td><td class="num">4 ליבות, <strong>עם AVX</strong></td><td class="num">8 ליבות</td></tr>
 <tr><td>זיכרון</td><td class="num">8 ג׳יגה</td><td class="num">16 ג׳יגה</td></tr>
 <tr><td>דיסק</td><td class="num">40 ג׳יגה פנויים</td><td class="num">100 ג׳יגה SSD</td></tr>
 <tr><td>מערכת הפעלה</td><td>לינוקס, Docker Engine 24+, Compose v2.20+</td><td>Ubuntu 22.04 / 24.04 LTS</td></tr>
 </tbody></table></div>
+<div class="warn"><p class="co-h">‏AVX היא דרישת חובה, לא הערת ביצועים</p>
+<p>‏MongoDB 5.0 ומעלה מהודרים עם הוראות AVX. מעבד שאין בו אותן אינו מריץ את מסד
+הנתונים לאט — הוא אינו מריץ אותו כלל. הקונטיינר נסגר מיד עם העלייה ואומר
+<code>WARNING: MongoDB 5.0+ requires a CPU with AVX support, and your current
+system does not appear to have that!</code>, שורה שקל לפספס בתוך פלט ההתקנה
+ושמשאירה את כל שאר הקונטיינרים תקינים.</p>
+<p>לכל מעבד שרת מאז 2011 בערך יש AVX, ולכן זו כמעט אף פעם לא החומרה. זו מכונה
+וירטואלית שמציגה דגם מעבד גנרי — ‏<code>qemu64</code>, ‏<code>kvm64</code>, רמת
+תאימות ישנה של Hyper-V — שמסתירה דגל שקיים במארח עצמו. הגדירו את דגם המעבד של
+האורח ל-<code>host</code> או ל-<code>host-passthrough</code>. הפקודה
+<code>./install.sh check</code> בודקת זאת לפני שנכתב משהו.</p></div>
 <h4>פורטים</h4>
 <div class="tw"><table>
 <thead><tr><th>כיוון</th><th>פורט</th><th>בין</th></tr></thead><tbody>
@@ -686,7 +724,7 @@ docker compose exec console node -e "fetch('https://example.com').catch(e=>{cons
 <ul>
 <li>שם מתחם שהעובדים יקלידו. שם פרטי כמו <code>payroll.office.local</code> תקין וזה המצב הרגיל.</li>
 <li>האם יכולות מבוססות AI רלוונטיות לכם בכלל (פרק 8). אפשר לכבות אותן לגמרי, ואוטומציית השכר ממשיכה לעבוד.</li>
-<li>מיהו המנהל הראשון — כתובת דוא״ל וסיסמה, שנקבעים בזמן ההתקנה.</li>
+<li>שום דבר לגבי המשתמש הראשון. ההתקנה מייצרת כתובת וסיסמה ומדפיסה אותן, ואת שם החשבון משנים מתוך הקונסולה לאחר מכן.</li>
 <li>לאן מגובה קובץ המפתחות (פרק 5). החליטו על כך <em>לפני</em> ההתקנה.</li>
 </ul>
 </section><section class="sec" id="install-he"><span class="sec-n">04</span><h2>התקנה</h2>
@@ -702,6 +740,19 @@ cd payroll-onprem
 ו<strong>טוקן התקנה</strong>. אלה הערכים היחידים שמגיעים מאיתנו; כל היתר נוצר
 כאן, על המכונה שלכם, ואינו עובר בשום שלב.</p>
 <div class="code"><button class="copy" type="button">העתק</button><pre>INSTALL_ID=&lt;the id we sent&gt; INSTALL_TOKEN=&lt;the token we sent&gt; ./install.sh install</pre></div>
+<p>ההתקנה אינה שואלת דבר. כתובת הדוא"ל והסיסמה של המשתמש הראשון נוצרות, נכתבות
+אל <code>.env</code>, ומודפסות בשורות האחרונות של ההתקנה:</p>
+<div class="code"><pre>▸ Sign in
+
+  Console   https://payroll.acme.local
+
+  Email     admin@payroll.acme.local
+  Password  7fQx-2mVd-9Ktp
+
+  Change the password after the first sign-in.
+  Both are also in .env — back that file up off this machine.</pre></div>
+<p>כדי לבחור בעצמכם, הגדירו <code>FIRST_USER_EMAIL</code> ו-<code>FIRST_USER_PASSWORD</code>
+לפני ההתקנה. הרצה חוזרת של ההתקנה בטוחה: היא מתקנת התקנה חלקית ולא מתחילה שנייה.</p>
 <div class="note"><p class="co-h">טוקן אחד עושה שתי עבודות</p>
 <p>הטוקן פותח שני ערוצים: דרכו ההתקנה <strong>מדווחת לנו שהיא חיה</strong>, ודרכו
 היא <strong>מושכת את הדואר שנשלח ללשכה</strong>. חסר טוקן — התוכנה עובדת כרגיל,
@@ -808,12 +859,12 @@ sudo ufw status</pre></div>
 
 </tbody></table></div>
 
-<div class="note"><p class="co-h">מה הספק יכול ומה אינו יכול</p>
-<p><strong>אין לנו גישה להתקנה הזו.</strong> אין מנהרה, אין חשבון תמיכה, אין
-מפתח ואין קונסולה מרוחקת. אנחנו לא יכולים לקרוא את הנתונים שלכם, להפעיל מחדש
-שירותים או לדחוף שינוי תצורה. אם תרצו שנבדוק משהו — אתם שולחים לנו את מה שאתם
-בוחרים לשלוח. הדבר היחיד שמגיע אלינו בלי פעולה שלכם הוא הטלמטריה שבפרק 8, ואפשר
-לכבות אותה.</p></div>
+<div class="note"><p class="co-h">אין לנו גישה להתקנה הזו</p>
+<p><strong>אין לנו שום גישה להתקנה הזו.</strong> אין מנהרה, אין חשבון תמיכה, אין
+מפתח ואין קונסולה מרוחקת. איננו יכולים לקרוא את הנתונים שלכם, להפעיל מחדש שירות
+או לדחוף שינוי תצורה. אם תרצו שנבדוק משהו, אתם שולחים לנו את מה שאתם בוחרים
+לשלוח. הדבר היחיד שמגיע אלינו בלי שתעשו דבר הוא הטלמטריה שבפרק 8 — מונים
+וגיבובים, לעולם לא תוכן, ופרק 8 מפרט בדיוק מה היא עשויה להכיל.</p></div>
 <h4>מה עושים כשעובד עוזב</h4>
 <p>משביתים את החשבון במסך הניהול. בנוסף חזרו לפרק 5 — אם אותו אדם החזיק את העותק
 היחיד של קובץ המפתחות, קבלו אותו לפני שהגישה שלו נסגרת.</p>
@@ -824,7 +875,7 @@ sudo ufw status</pre></div>
 <thead><tr><th>יעד</th><th>לשם מה</th><th>הכרחי</th></tr></thead><tbody>
 <tr><td class="mono">dekelmichpalil.azurecr.io</td><td>תמונות התוכנה, בהתקנה ובעדכון</td><td><strong>כן</strong></td></tr>
 <tr><td class="mono">broker.dekel.io</td><td>AI, reached only by the gateway</td><td>only with AI features</td></tr>
-<tr><td class="mono">נקודת הדיווח שלכם</td><td>טלמטריה מצרפית, אם הוגדרה</td><td>לא — ריק פירושו שלא נשלח דבר</td></tr>
+<tr><td class="mono">dekel.sh</td><td>טלמטריה מצרפית, ובאותו חיבור ההתקנה גם אוספת את הדואר הנכנס שלכם</td><td><strong>כן</strong></td></tr>
 </tbody></table></div>
 <div class="warn"><p class="co-h">יש שני ספקי AI, לא אחד</p>
 <p>קריאת מסמכים — דוחות נוכחות, תלושים, טפסים, חוזים — רצה מול
@@ -837,10 +888,12 @@ sudo ufw status</pre></div>
 מקום ומוחזרים בתשובה. מסמכים מומרים לטקסט <em>על השרת הזה</em>; רק הטקסט המפוסבד
 חוצה. מה שה-OCR לא מצליח לקרוא נדחה ולא מועבר. צירופי קבצים
 <strong>חסומים כברירת מחדל</strong> — ההגדרה בידיכם, לשינוי מודע.</li>
-<li><strong>טלמטריה</strong>, אם תגדירו אותה: ספירות, משכי זמן, קודי שגיאה
-ומזהים מגובבים, שנבדקים מול רשימת היתר רגע לפני השליחה, כך שכל מה שאינו מספר,
-חותמת זמן, גיבוב או קוד מוכר נדחה מעצם המבנה. <code>GET /snapshot</code> בשירות
-הטלמטריה מציג לכם בדיוק מה היה נשלח, לפני שנשלח.</li>
+<li><strong>טלמטריה מצרפית</strong>: מונים, משכי זמן, קודי שגיאה ומזהים
+מגובבים, שנבדקים מול רשימת היתר מיד לפני השליחה, כך שכל מה שאינו מספר, חותמת
+זמן, גיבוב או קוד מוכר נדחה מעצם הבנייה. הפנייה <code>GET /snapshot</code> בשירות
+המדדים מראה לכם בדיוק מה היה נשלח, לפני שנשלח. זה חלק מההתקנה ולא הגדרה — אותו
+אסימון יחיד ששלחנו לכם גם מדווח על תקינות ההתקנה וגם אוסף את הדואר הנכנס שלכם,
+כך שהתקנה שאינה מדווחת דבר היא גם התקנה שדואר הלקוחות שלה לעולם אינו מגיע.</li>
 <li><strong>הורדת תמונות</strong> בהתקנה ובעדכון. בלי שום תוכן שלכם.</li>
 </ol>
 <h4>כיבוי מוחלט של ה-AI</h4>
@@ -939,8 +992,8 @@ WORKER_TOKEN=...</pre></div>
 </tbody></table></div>
 <h4>הסרה מלאה</h4>
 <div class="code"><button class="copy" type="button">העתק</button><pre>docker compose down -v   <span class="c"># stops everything AND deletes the data volumes</span></pre></div>
-<p>שום דבר משלכם לא קיים במקום אחר, אז זה כל הסיפור. אם הגדרתם טלמטריה, הודיעו
-לנו ונמחק את מה שדווח.</p>
+<p>שום דבר משלכם אינו קיים במקום אחר, ולכן זה הכול. הודיעו לנו כשתעשו זאת
+ונמחק את מה שההתקנה הזו דיווחה.</p>
 </section><section class="sec" id="trouble-he"><span class="sec-n">14</span><h2>איתור תקלות</h2>
 <div class="tw"><table>
 <thead><tr><th>תסמין</th><th>סיבה ופעולה</th></tr></thead><tbody>

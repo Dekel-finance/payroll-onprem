@@ -10,7 +10,7 @@ any text reaches a model vendor, and puts the real values back in the answer.
 The applications are on a Docker network with no route out at all — not by
 policy, by construction: a call that skipped the gateway would fail to resolve.
 
-[עברית](README.he.md) · [Illustrated guide](https://onprem.dekel.io) · Version 1.1.8
+[עברית](README.he.md) · [Illustrated guide](https://onprem.dekel.io) · Version 1.1.11
 
 ---
 
@@ -18,10 +18,26 @@ policy, by construction: a call that skipped the gateway would fail to resolve.
 
 | | Minimum | Comfortable |
 |---|---|---|
-| CPU | 4 cores | 8 cores |
+| CPU | 4 cores, **with AVX** | 8 cores |
 | RAM | 8 GB | 16 GB |
 | Disk | 40 GB free | 100 GB SSD |
 | OS | Linux with Docker Engine 24+ and Compose v2.20+ | Ubuntu 22.04 / 24.04 LTS |
+
+**AVX is not optional and not a performance note.** MongoDB 5.0 and later are
+compiled with those instructions, so a CPU without them does not run the
+database slowly — it does not run it at all. The container exits at startup
+saying:
+
+```
+WARNING: MongoDB 5.0+ requires a CPU with AVX support, and your current system
+does not appear to have that!
+```
+
+Every server CPU since about 2011 has AVX, so this is almost never the hardware.
+It is a virtual machine presenting a generic CPU model — `qemu64`, `kvm64`, an
+old Hyper-V compatibility level — that hides the flag the host really has. Set
+the guest's CPU model to `host` (or `host-passthrough`) and it appears.
+`./install.sh check` tests for it before anything is written.
 
 You also need:
 
@@ -104,13 +120,32 @@ Do this, in order, and stop and tell me if a step does not do what it says:
    what I have to fix.
 5. Run ./install.sh status and confirm every service is healthy.
 
-Then give me the URL to sign in at, and remind me to copy .env somewhere off
-this machine. Do not commit .env anywhere. Do not load any demo or sample data.
+6. Read back the "Sign in" block it prints last — the console address, the
+   email and the password. Do not invent these; the installer generated them.
+
+Then remind me to copy .env somewhere off this machine. Do not commit .env
+anywhere. Do not load any demo or sample data.
 ```
 
-The installer asks for an email address and a password for the first
-administrator, then prints the addresses to open. It takes about five minutes,
-most of it downloading.
+The installer asks you nothing. It generates the first user's address and
+password, writes both into `.env`, and prints them with the address to open as
+its last lines:
+
+```text
+▸ Sign in
+
+  Console   https://payroll.acme.local
+
+  Email     admin@payroll.acme.local
+  Password  7fQx-2mVd-9Ktp
+
+  Change the password after the first sign-in.
+  Both are also in .env — back that file up off this machine.
+```
+
+Set `FIRST_USER_EMAIL` and `FIRST_USER_PASSWORD` before installing if you would
+rather choose your own; the account can also be renamed from inside the console
+afterwards. The whole install takes about five minutes, most of it downloading.
 
 Its last step verifies the token against us and prints one of:
 
@@ -253,7 +288,7 @@ restart:
 
 ```bash
 AUTO_UPDATE_MONITOR_ONLY=true   # it reports what it would do, and does nothing
-BUNDLE_VERSION=1.1.8            # pin an exact version; updates never fire
+BUNDLE_VERSION=1.1.11           # pin an exact version; updates never fire
 ```
 
 Either way `./install.sh update` applies the current release immediately.
@@ -293,13 +328,17 @@ Three things, and nothing else:
    placeholders (`[PII:ID:1]`) and restored in the answer. Documents are read
    *on this server* — a PDF becomes text here, and only the pseudonymised text
    crosses. What a scan does not yield to OCR is refused rather than forwarded.
-2. **Aggregate telemetry**, if you enable it: counts, durations, error codes and
-   hashed identifiers, so we can see that an install is healthy. It is checked
-   against an allow-list immediately before sending — anything that is not a
-   number, a timestamp, a hash or a known code is refused, so a name or an error
-   message quoting a screen cannot pass by construction. `GET /snapshot` on the
-   metrics service shows you exactly what would be sent. Leave
-   `BETTERSTACK_*` blank and nothing is reported at all.
+2. **Aggregate telemetry**: counts, durations, error codes and hashed
+   identifiers, so we can see that an install is healthy. It is checked against
+   an allow-list immediately before sending — anything that is not a number, a
+   timestamp, a hash or a known code is refused, so a name or an error message
+   quoting a screen cannot pass by construction. `GET /snapshot` on the metrics
+   service shows you exactly what would be sent, at any time.
+
+   This is part of the install rather than a setting, and the reason is the same
+   token: the one credential we send you both reports this install's health and
+   **collects your inbound email**. An install that reported nothing would be one
+   we could not tell was broken, and one whose clients' mail never arrived.
 3. **Image downloads**, when you install or update.
 
 There is no remote access channel. We cannot reach into this install; if you

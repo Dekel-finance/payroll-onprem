@@ -64,7 +64,38 @@ cmd_check() {
   fi
 
   step "Machine"
-  local cores mem_gb disk_gb
+  local cores mem_gb disk_gb arch
+
+  # AVX, and it is a hard stop rather than a warning.
+  #
+  # MongoDB 5.0 and later are compiled with AVX instructions; a CPU without them
+  # does not run the database slowly, it does not run it at all — the container
+  # exits and the log says only:
+  #
+  #   WARNING: MongoDB 5.0+ requires a CPU with AVX support, and your current
+  #   system does not appear to have that!
+  #
+  # Which is easy to miss in a wall of pulling output, and leaves an install
+  # where every other container is healthy. The usual cause is not old hardware:
+  # it is a hypervisor presenting a generic CPU model (`qemu64`, `kvm64`, an old
+  # Hyper-V compatibility level) that masks the flag the host actually has. Set
+  # the guest CPU to `host` — or `host-passthrough` — and it appears.
+  arch="$(uname -m 2>/dev/null || echo unknown)"
+  case "$arch" in
+    x86_64|amd64)
+      if [ -r /proc/cpuinfo ]; then
+        if grep -qm1 '\bavx\b' /proc/cpuinfo; then
+          ok "the CPU supports AVX"
+        else
+          warn "this CPU reports no AVX — MongoDB 5.0+ will not start on it. If this is a VM, set its CPU model to host/host-passthrough."; fail=1
+        fi
+      else
+        warn "cannot read /proc/cpuinfo — AVX not verified; if the database will not start, this is why"
+      fi
+      ;;
+    *) ok "$arch — AVX does not apply on this architecture" ;;
+  esac
+
   cores="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 0)"
   if [ "$cores" -ge 4 ]; then ok "$cores CPU cores"; else warn "$cores CPU cores — 4 is the practical minimum"; fi
 
@@ -112,6 +143,38 @@ cmd_check() {
 }
 
 rand_hex() { openssl rand -hex 32; }
+
+# The first user's password, generated rather than asked for.
+#
+# Twelve characters in three groups, from an alphabet with no `l`, `1`, `O` or
+# `0` in it — this gets read off a terminal by one person and typed into a
+# browser by another, and the ambiguous pair costs more support time than the
+# entropy it buys. ~69 bits, which is a long way past anything that matters for
+# a credential meant to be changed at the first sign-in.
+#
+# `cut`, not `head -c`: head closes the pipe early, openssl takes SIGPIPE, and
+# `set -o pipefail` turns a perfectly good password into a failed install.
+rand_password() {
+  local raw
+  raw="$(openssl rand -base64 96 | LC_ALL=C tr -dc 'A-HJ-NP-Za-km-z2-9' | cut -c1-12)"
+  printf '%s-%s-%s' "${raw:0:4}" "${raw:4:4}" "${raw:8:4}"
+}
+
+# The address that first user signs in with.
+#
+# Derived, not asked for. A bureau that wants a real person's address sets
+# FIRST_USER_EMAIL; everyone else gets an account that works and renames itself
+# later from inside the console. It has to LOOK like an address — the login form
+# validates one — so a SITE_ADDRESS that is an IP or a bare `localhost` falls
+# back to a name that is always well-formed and never routable.
+first_user_email() {
+  # A hostname with a dot in it, and not an IP address — `10.0.0.5` and a bare
+  # `localhost` both fall through to the well-formed default.
+  case "${SITE_ADDRESS:-}" in
+    *[!0-9.]*.*) printf 'admin@%s' "$SITE_ADDRESS" ;;
+    *)           printf 'admin@payroll.local' ;;
+  esac
+}
 
 # This install's mail keypair — the private half, and it is generated HERE.
 #
@@ -193,8 +256,17 @@ INTERFAZE_API_KEY=${INTERFAZE_API_KEY:-}
 # to use one, we send you its address and bearer.
 MICHPAL_WORKER_URL=${MICHPAL_WORKER_URL:-}
 
-# Telemetry we receive: counts, durations and error codes. Never a name, a
-# document or an error message. Blank = this install reports nothing.
+# The first user of the console. Generated here rather than asked for: an
+# installer that stops to interview somebody is an installer that cannot be run
+# by a script, and the account is renamed from inside the console anyway. Set
+# FIRST_USER_EMAIL/FIRST_USER_PASSWORD before installing to choose your own.
+FIRST_USER_EMAIL=${FIRST_USER_EMAIL:-$(first_user_email)}
+FIRST_USER_PASSWORD=${FIRST_USER_PASSWORD:-$(rand_password)}
+
+# Application logs and traces: counts, durations, error codes and hashed
+# identifiers, checked against an allow-list before they are sent. Never a name,
+# a document or an error message. Part of the install, like the health rollup —
+# these two lines are sent to you with the install id and token.
 BETTERSTACK_INGEST_HOST=${BETTERSTACK_INGEST_HOST:-}
 BETTERSTACK_SOURCE_TOKEN=${BETTERSTACK_SOURCE_TOKEN:-}
 BETTERSTACK_HEARTBEAT_URL=${BETTERSTACK_HEARTBEAT_URL:-}
@@ -279,7 +351,8 @@ cmd_install() {
   ok "the console is healthy"
 
   cmd_bootstrap
-  cmd_status
+  dc ps
+  print_signin
 }
 
 # ── The four things an install cannot know about itself ──────────────────────
@@ -287,13 +360,16 @@ cmd_bootstrap() {
   # shellcheck disable=SC1090
   set -a && . "$ENV_FILE" && set +a
   local email="${FIRST_USER_EMAIL:-}" pass="${FIRST_USER_PASSWORD:-}"
-  if [ -z "$email" ]; then
-    read -r -p "  Email address for the first administrator: " email
+
+  # Nothing is asked. `write_env` put both in `.env` on the first run; this
+  # covers the install that predates that, and appends rather than invents a
+  # second account nobody is ever told about.
+  if [ -z "$email" ] || [ -z "$pass" ]; then
+    email="${email:-$(first_user_email)}"
+    pass="${pass:-$(rand_password)}"
+    printf '\nFIRST_USER_EMAIL=%s\nFIRST_USER_PASSWORD=%s\n' "$email" "$pass" >> "$ENV_FILE"
+    ok "first user written to .env"
   fi
-  if [ -z "$pass" ]; then
-    read -r -s -p "  Choose a password for it: " pass; echo
-  fi
-  [ -n "$email" ] && [ -n "$pass" ] || die "an install with no user cannot be signed into, and nothing else can create one"
 
   step "Registering the agency and the first user, and checking the install token"
   # Copied to /app rather than /tmp: node resolves its dependencies by walking up
@@ -316,15 +392,44 @@ cmd_bootstrap() {
   dc exec -T gateway node /app/verify-install.mjs
 }
 
+# The address staff type. One definition, because a URL assembled twice is a URL
+# that disagrees with itself the first time someone changes the port.
+console_url() {
+  local port_suffix=""
+  [ "${CONSOLE_PORT:-443}" = "443" ] || port_suffix=":${CONSOLE_PORT}"
+  printf 'https://%s%s' "${SITE_ADDRESS:-localhost}" "$port_suffix"
+}
+
+# What the installer's last lines say.
+#
+# The whole point of an install is that somebody can then sign in, and that
+# question used to be answered in three places — an address here, an email the
+# operator typed several minutes earlier, a password they chose and did not
+# write down. It is one block now, printed last, with everything needed to open
+# the product and nothing else.
+print_signin() {
+  say ""
+  printf '%s▸ Sign in%s\n' "$BOLD" "$OFF"
+  say ""
+  say "  ${BOLD}Console${OFF}   $(console_url)"
+  say ""
+  say "  Email     ${FIRST_USER_EMAIL:-unknown}"
+  say "  Password  ${FIRST_USER_PASSWORD:-see .env}"
+  say ""
+  say "  ${DIM}Change the password after the first sign-in.${OFF}"
+  say "  ${DIM}Both are also in .env — back that file up off this machine.${OFF}"
+  say ""
+}
+
 cmd_status() {
   # shellcheck disable=SC1090
   set -a && . "$ENV_FILE" && set +a
   dc ps
-  local scheme=https host="${SITE_ADDRESS:-localhost}"
   say ""
-  local port_suffix=""
-  [ "${CONSOLE_PORT:-443}" = "443" ] || port_suffix=":${CONSOLE_PORT}"
-  say "  ${BOLD}Console${OFF}  $scheme://$host$port_suffix   ${DIM}the payroll office${OFF}"
+  say "  ${BOLD}Console${OFF}  $(console_url)   ${DIM}the payroll office${OFF}"
+  # The address only. A password belongs in the install's last lines and in
+  # `.env`, not in the output of a command people paste into a support email.
+  say "  ${DIM}sign in as ${FIRST_USER_EMAIL:-see .env} — password in .env (FIRST_USER_PASSWORD)${OFF}"
   say ""
 }
 
