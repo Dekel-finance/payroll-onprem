@@ -79,6 +79,13 @@ x-app-env: &app-env
   # so an install could satisfy every required variable and still fail.
   NATIONAL_ID_KEYS: ${NATIONAL_ID_KEYS:?set NATIONAL_ID_KEYS in .env}
   NATIONAL_ID_ACTIVE_KEY: ${NATIONAL_ID_ACTIVE_KEY:-}
+  # The keyring for stored customer credentials — the payroll server's RDP
+  # password the office types into settings. Without it the connection details
+  # cannot be saved; blank rather than required so an install predating it
+  # still boots, and the settings screen names the missing key instead of the
+  # stack failing to come up. Same custody rule as NATIONAL_ID_KEYS.
+  SECRET_KEYS: ${SECRET_KEYS:-}
+  SECRET_ACTIVE_KEY: ${SECRET_ACTIVE_KEY:-}
 
 services:
   mongo:
@@ -317,6 +324,79 @@ services:
       timeout: 10s
       retries: 3
       start_period: 90s
+
+  # ── The Michpal connector — only for installs with a Windows box ──────────
+  #
+  #   docker compose --profile michpal up -d
+  #
+  # On-prem the install IS the connector: this bundle sits inside the office
+  # network, so the RDP hop starts here rather than on a VM of ours. A profile
+  # rather than an always-on service, because it is useless without a Windows
+  # machine running the payroll program on the LAN, and a permanently-unhealthy
+  # container in every install would train operators to ignore red.
+  #
+  # NOT labelled for watchtower — the connector rides its own release cadence.
+  # After first `up`, re-run register-install.mjs (idempotent) so the console's
+  # routing row points at http://michpal-worker:8080; then the office enters
+  # the server's address and login in the console's settings screen, which
+  # proves the login before anything is saved.
+  guacd:
+    image: guacamole/guacd:1.5.5
+    profiles: [michpal]
+    restart: unless-stopped
+    # `internal` so the worker can reach it, and `lan` because guacd is the
+    # process that actually opens the RDP socket to the Windows box. On the
+    # internal network alone that dial cannot leave the host.
+    networks: [internal, lan]
+
+  michpal-worker:
+    profiles: [michpal]
+    image: ${CONNECTOR_IMAGE:-dekelmichpalil.azurecr.io/payroll-michpal-worker}:${BUNDLE_VERSION:-stable}
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      WORKER_TOKEN: ${WORKER_TOKEN:?set WORKER_TOKEN in .env}
+      BRIDGE: http://127.0.0.1:8931
+      GUACD: ${GUACD:-guacd:4822}
+      # Recordings and payslip PDFs to a local volume, served back from this
+      # worker under its own bearer — never a public host.
+      DEPLOY_TARGET: onprem
+      MICHPAL_STORAGE: disk
+      ARTIFACT_DIR: /var/lib/michpal/artifacts
+      ARTIFACT_BASE: http://michpal-worker:8080
+      # Its AI fallback goes through the gateway like everything else.
+      ANTHROPIC_BASE_URL: http://gateway:8090
+      ANTHROPIC_API_KEY: ${GATEWAY_TOKEN:?set GATEWAY_TOKEN in .env}
+      # The Windows box this connector drives. OPTIONAL at boot: the office
+      # enters host/port/user/password in the console's settings screen, which
+      # probes with the submitted values — a connector that boots unbound is
+      # the normal first state, not an error.
+      RDP_HOST: ${RDP_HOST:-}
+      RDP_USER: ${RDP_USER:-}
+      RDP_PASS: ${RDP_PASS:-}
+    volumes:
+      - michpal-artifacts:/var/lib/michpal/artifacts
+    # `lan` is a routable bridge — the Windows box is on the office LAN, which
+    # `internal` deliberately cannot reach. This is the one documented hole in
+    # the no-egress property, and it is the price of driving a desktop: the
+    # console apps stay sealed, this container does not.
+    networks: [internal, lan]
+    depends_on:
+      guacd: {condition: service_started}
+      gateway: {condition: service_started}
+    healthcheck:
+      # node, not curl: the connector image carries the RDP/ffmpeg stack and no
+      # curl at all, so the probe every other service uses can never pass here.
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8080/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
   caddy:
     image: caddy:2
     restart: unless-stopped
@@ -417,8 +497,12 @@ networks:
   internal:
     internal: true
   egress:
+  # Routable bridge for the michpal profile only: guacd dials the Windows box
+  # on the office LAN from here. Containers on `internal` alone cannot.
+  lan:
 
 volumes:
   caddy-data:
   mongo-data:
   console-files:
+  michpal-artifacts:

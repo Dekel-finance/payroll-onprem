@@ -215,6 +215,11 @@ CRON_SECRET=$(rand_hex)
 WORKER_TOKEN=$(rand_hex)
 NATIONAL_ID_KEYS=v1:$(openssl rand -base64 64 | tr '+/' '-_' | tr -d '=\n')
 NATIONAL_ID_ACTIVE_KEY=v1
+# The stored-credential keyring (AES-256): the RDP password the office types
+# into the console's settings is sealed with this before it touches the
+# database. Same custody rule as NATIONAL_ID_KEYS.
+SECRET_KEYS=v1:$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n')
+SECRET_ACTIVE_KEY=v1
 
 # Who this install is, in our fleet. An opaque handle, not your company name.
 METRICS_INSTALL_ID=${INSTALL_ID:-install-$(openssl rand -hex 4)}
