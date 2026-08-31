@@ -46,8 +46,12 @@ import { randomBytes, scryptSync } from "node:crypto";
 
 const URI = process.env.MONGODB_URI ?? "mongodb://mongo:27017";
 const DB = process.env.MONGODB_DB ?? "payroll";
-const BASE_URL = (process.env.MICHPAL_WORKER_URL ?? "http://michpal-worker:8080").replace(/\/+$/, "");
-const TOKEN = process.env.WORKER_TOKEN ?? process.env.MICHPAL_WORKER_TOKEN ?? "";
+// `||`, not `??`: every install's .env carries `MICHPAL_WORKER_URL=` as an
+// EMPTY line, which is not nullish — `??` kept the empty string and seeded a
+// connector row with no address, which every probe then reported as its own
+// failure.
+const BASE_URL = (process.env.MICHPAL_WORKER_URL || "http://michpal-worker:8080").replace(/\/+$/, "");
+const TOKEN = process.env.WORKER_TOKEN || process.env.MICHPAL_WORKER_TOKEN || "";
 
 const AGENCY_NAME = (process.env.AGENCY_NAME ?? "").trim() || "הלשכה";
 const FIRST_EMAIL = (process.env.FIRST_USER_EMAIL ?? "").trim().toLowerCase();
