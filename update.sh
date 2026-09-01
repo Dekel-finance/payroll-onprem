@@ -35,14 +35,25 @@ ensure KIT_DIR "$(pwd)"
 
 # ── Apply the wiring ─────────────────────────────────────────────────────────
 #
+# NEVER the operator itself. This script runs INSIDE the operator container,
+# and an `up` that decides to recreate it (a moved docker-cli digest is
+# enough) kills the compose process mid-apply — half the stack stopped, no
+# error anywhere, and the next cycle sees no file diff to notice it by. That
+# was the 1.2.3 outage. The operator's own definition changes apply on the
+# next host-run ./install.sh update, whose compose is not sawing its own
+# branch.
+#
 # Pull first: the services watchtower deliberately never touches (the
 # connector) move at exactly these moments — a release that changed the kit is
 # a chosen moment, not an unattended 03:00 restart mid-payroll-run.
 # `--remove-orphans` is the "kill old services" half of the contract: a service
 # a release removed from this file is stopped, not left running for ever.
 # Volumes are never touched — data outlives topology.
-docker compose -f docker-compose.yml pull --quiet || echo "update: pull failed — applying with local images"
-docker compose -f docker-compose.yml up -d --remove-orphans
+SERVICES="$(docker compose -f docker-compose.yml config --services | grep -vx operator | tr '\n' ' ')"
+# shellcheck disable=SC2086
+docker compose -f docker-compose.yml pull --quiet $SERVICES || echo "update: pull failed — applying with local images"
+# shellcheck disable=SC2086
+docker compose -f docker-compose.yml up -d --remove-orphans $SERVICES
 
 # ── Reseed the rows the applications resolve at runtime ──────────────────────
 #

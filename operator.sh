@@ -42,6 +42,16 @@ for f in "$STAGE"/*; do
 done
 chmod +x ./*.sh 2>/dev/null || true
 
-[ "$changed" -eq 1 ] || exit 0
+if [ "$changed" -eq 0 ]; then
+  # Converge even without a diff: an apply cut short (the pre-1.2.4 operator
+  # could kill itself mid-`up`) leaves services stopped and no file change to
+  # notice it by. `up` with nothing to do is a no-op; with a half-stopped
+  # stack it is the repair. The operator itself is excluded for the same
+  # reason update.sh excludes it.
+  SERVICES="$(docker compose -f docker-compose.yml config --services | grep -vx operator | tr '\n' ' ')"
+  # shellcheck disable=SC2086
+  docker compose -f docker-compose.yml up -d $SERVICES >/dev/null 2>&1 || true
+  exit 0
+fi
 echo "operator: kit changed — applying"
 sh ./update.sh
