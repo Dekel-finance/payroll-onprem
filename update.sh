@@ -35,9 +35,13 @@ ensure KIT_DIR "$(pwd)"
 
 # ── Apply the wiring ─────────────────────────────────────────────────────────
 #
+# Pull first: the services watchtower deliberately never touches (the
+# connector) move at exactly these moments — a release that changed the kit is
+# a chosen moment, not an unattended 03:00 restart mid-payroll-run.
 # `--remove-orphans` is the "kill old services" half of the contract: a service
 # a release removed from this file is stopped, not left running for ever.
 # Volumes are never touched — data outlives topology.
+docker compose -f docker-compose.yml pull --quiet || echo "update: pull failed — applying with local images"
 docker compose -f docker-compose.yml up -d --remove-orphans
 
 # ── Reseed the rows the applications resolve at runtime ──────────────────────
