@@ -327,22 +327,20 @@ services:
 
   # ── The Michpal connector — only for installs with a Windows box ──────────
   #
-  #   docker compose --profile michpal up -d
-  #
   # On-prem the install IS the connector: this bundle sits inside the office
-  # network, so the RDP hop starts here rather than on a VM of ours. A profile
-  # rather than an always-on service, because it is useless without a Windows
-  # machine running the payroll program on the LAN, and a permanently-unhealthy
-  # container in every install would train operators to ignore red.
+  # network, so the RDP hop starts here rather than on a VM of ours. Always on,
+  # not a profile — an office installs on-prem BECAUSE there is a payroll
+  # machine on the LAN to drive, and the opt-in profile produced installs where
+  # every container was green and no payroll could ever run. A connector that
+  # boots unbound is the normal first state: the office enters the server's
+  # address and login in the console's settings screen, which proves the login
+  # before anything is saved.
   #
   # NOT labelled for watchtower — the connector rides its own release cadence.
-  # After first `up`, re-run register-install.mjs (idempotent) so the console's
-  # routing row points at http://michpal-worker:8080; then the office enters
-  # the server's address and login in the console's settings screen, which
-  # proves the login before anything is saved.
+  # update.sh re-runs register-install.mjs (idempotent) so the console's
+  # routing row points at http://michpal-worker:8080.
   guacd:
     image: guacamole/guacd:1.5.5
-    profiles: [michpal]
     restart: unless-stopped
     # `internal` so the worker can reach it, and `lan` because guacd is the
     # process that actually opens the RDP socket to the Windows box. On the
@@ -350,7 +348,6 @@ services:
     networks: [internal, lan]
 
   michpal-worker:
-    profiles: [michpal]
     image: ${CONNECTOR_IMAGE:-dekelmichpalil.azurecr.io/payroll-michpal-worker}:${BUNDLE_VERSION:-stable}
     restart: unless-stopped
     environment:
@@ -460,6 +457,46 @@ services:
   # nobody logs into is usually the larger risk. A bureau that disagrees sets
   # `AUTO_UPDATE=monitor` (it reports and changes nothing) or stops the
   # container; `./install.sh update` then does the same job by hand.
+  # ── The operator: updates the WIRING, not just the images ─────────────────
+  #
+  # Watchtower above swaps the image inside an existing service; it can never
+  # start a service a release added or stop one a release removed. The operator
+  # closes that gap: every release image carries the kit that matches it under
+  # /app/kit, and each cycle this pulls the channel image, extracts that kit,
+  # and — only when a file actually changed — syncs it into this directory and
+  # runs update.sh (env-key migrations, `compose up -d --remove-orphans`, the
+  # idempotent row reseed). An install therefore converges on the release's
+  # topology with nobody at the keyboard, which is the property the whole
+  # bundle promises.
+  #
+  # It holds the Docker socket — same cost, same reasoning, and same opt-outs
+  # as watchtower's paragraph below. KIT_DIR is this directory's HOST path
+  # (install.sh writes it to .env): mounted at the same path inside, so the
+  # compose invocations it makes resolve ./Caddyfile, ./.env and the project
+  # name exactly as they do from a shell on the host.
+  operator:
+    image: docker:27-cli
+    restart: unless-stopped
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        while true; do
+          sh "$$KIT_DIR/operator.sh" || echo "operator: cycle failed — retrying next interval"
+          sleep "$${INTERVAL:-600}"
+        done
+    environment:
+      REGISTRY: ${REGISTRY:-dekelmichpalil.azurecr.io}
+      BUNDLE_VERSION: ${BUNDLE_VERSION:-stable}
+      KIT_DIR: ${KIT_DIR:?run ./install.sh update once — it writes KIT_DIR to .env}
+      INTERVAL: ${AUTO_UPDATE_INTERVAL:-600}
+    working_dir: ${KIT_DIR:-/kit}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${KIT_DIR:-.}:${KIT_DIR:-/kit}
+    # `egress` to reach the registry, like watchtower — and like watchtower,
+    # deliberately NOT `internal`.
+    networks: [egress]
+
   watchtower:
     image: containrrr/watchtower:1.7.1
     restart: unless-stopped

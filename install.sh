@@ -318,19 +318,37 @@ EOF
   ok "wrote .env — ${BOLD}back this file up now${OFF}"
 }
 
-# One compose file. Which certificate Caddy issues is CADDYFILE in .env, not a
-# second file to remember to pass.
+# Keys a NEWER bundle needs that an older .env predates. Appended only when
+# missing — an existing value is never touched, because two of these seal data
+# at rest. update.sh applies the same set from inside the operator container;
+# this covers the hand-run path.
+ensure_env() {
+  grep -q "^$1=" "$ENV_FILE" 2>/dev/null || { printf '%s=%s\n' "$1" "$2" >> "$ENV_FILE"; ok "added $1 to .env"; }
+}
+ensure_env_keys() {
+  [ -f "$ENV_FILE" ] || return 0
+  ensure_env WORKER_TOKEN "$(rand_hex)"
+  ensure_env SECRET_KEYS "v1:$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n')"
+  ensure_env SECRET_ACTIVE_KEY "v1"
+  # The operator mounts this directory at its own host path; compose inside the
+  # container then resolves ./Caddyfile, .env and the project name identically.
+  ensure_env KIT_DIR "$HERE"
+}
+
+# One compose file, no profiles: the connector is part of the bundle (an
+# on-prem install exists because there is a payroll machine to drive).
 dc() {
   if [ -f "$ENV_FILE" ]; then
     # shellcheck disable=SC1090
     set -a; . "$ENV_FILE"; set +a
   fi
-  "${COMPOSE[@]}" -f docker-compose.yml --profile "${PROFILE:-michpal}" "$@"
+  "${COMPOSE[@]}" -f docker-compose.yml "$@"
 }
 
 cmd_install() {
   cmd_check
   write_env
+  ensure_env_keys
   # shellcheck disable=SC1090
   set -a && . "$ENV_FILE" && set +a
 
@@ -439,17 +457,21 @@ cmd_status() {
 }
 
 cmd_update() {
+  ensure_env_keys
   # shellcheck disable=SC1090
   set -a && . "$ENV_FILE" && set +a
   step "Pulling ${BUNDLE_VERSION:-stable}"
   dc pull
-  dc up -d
+  # `--remove-orphans`: a service a release removed is stopped, not left
+  # running for ever. Volumes are never touched — data outlives topology.
+  dc up -d --remove-orphans
   ok "updated — your data was not touched"
-  # Images move on `pull`; the compose file and this script do not. A change to
-  # how the install is wired (a port, a new service) arrives with a `git pull`
-  # in this directory, and an install that never pulls keeps its old wiring
-  # while reporting the new version.
-  say "  ${DIM}configuration changes arrive with: git pull && ./install.sh update${OFF}"
+  # Idempotent, and repairs as much as it registers: the routing row the
+  # console resolves (including one an older installer seeded broken).
+  cmd_bootstrap
+  # From here on the `operator` service does this whole command by itself:
+  # every release carries its own kit, and the operator syncs and applies it.
+  # Running this by hand remains equivalent, never required.
   cmd_status
 }
 

@@ -280,6 +280,7 @@ gets restarted is deliberately narrow:
 | | updates by itself |
 |---|---|
 | the applications (console, admin, and the background services) | **yes** — a few seconds each, one at a time |
+| how the install is wired (a new service in a release, one a release removed, a new key in `.env`) | **yes** — every release carries its own copy of this kit, and the `operator` service applies any change to it. Your `.env` and your data are never part of that. |
 | the database | **never.** A database upgrade is a data migration and is not something to do unattended at 03:00. |
 | the מיכפל connector | **no**, by default. It runs one session at a time and keeps a run's state in memory, so restarting it mid-run would end that payroll run without reporting it. `./install.sh update` restarts it when you are watching. |
 

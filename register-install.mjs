@@ -53,7 +53,11 @@ const DB = process.env.MONGODB_DB ?? "payroll";
 const BASE_URL = (process.env.MICHPAL_WORKER_URL || "http://michpal-worker:8080").replace(/\/+$/, "");
 const TOKEN = process.env.WORKER_TOKEN || process.env.MICHPAL_WORKER_TOKEN || "";
 
-const AGENCY_NAME = (process.env.AGENCY_NAME ?? "").trim() || "הלשכה";
+// Empty means "not told", and not-told must not overwrite: the office renames
+// itself from inside the console, and an automated re-run (the operator applies
+// every release) that reset the name to the default would undo that rename on
+// a schedule. The default participates only in $setOnInsert.
+const AGENCY_NAME = (process.env.AGENCY_NAME ?? "").trim();
 const FIRST_EMAIL = (process.env.FIRST_USER_EMAIL ?? "").trim().toLowerCase();
 const FIRST_PASSWORD = process.env.FIRST_USER_PASSWORD ?? "";
 
@@ -81,10 +85,20 @@ if (!agencyId) {
 await db.collection("admin_agencies").updateOne(
   { _id: agencyId },
   {
-    $set: { name: AGENCY_NAME, ownerEmail: FIRST_EMAIL, status: "active" },
+    // Only what was actually told. A bare repair run (the operator's) supplies
+    // neither name nor email and therefore changes neither.
+    $set: {
+      status: "active",
+      ...(AGENCY_NAME ? { name: AGENCY_NAME } : {}),
+      ...(FIRST_EMAIL ? { ownerEmail: FIRST_EMAIL } : {}),
+    },
     // The ingest bearer is generated once and never rotated by a re-run — a new
     // value here would silently break whatever is already pushing with the old.
-    $setOnInsert: { apiKey: randomBytes(24).toString("hex"), provisionedAt: now },
+    $setOnInsert: {
+      apiKey: randomBytes(24).toString("hex"),
+      provisionedAt: now,
+      ...(AGENCY_NAME ? {} : { name: "הלשכה" }),
+    },
   },
   { upsert: true },
 );
@@ -93,10 +107,13 @@ await db.collection("admin_agencies").updateOne(
 // guess and the office sees on every screen.
 await db.collection("console_office").updateOne(
   { _id: agencyId },
-  { $set: { agencyId, agencyName: AGENCY_NAME, updatedAt: now } },
+  {
+    $set: { agencyId, updatedAt: now, ...(AGENCY_NAME ? { agencyName: AGENCY_NAME } : {}) },
+    $setOnInsert: AGENCY_NAME ? {} : { agencyName: "הלשכה" },
+  },
   { upsert: true },
 );
-console.log(`agency ${agencyId}  "${AGENCY_NAME}"`);
+console.log(`agency ${agencyId}${AGENCY_NAME ? `  "${AGENCY_NAME}"` : ""}`);
 
 // ── 2. the Michpal connector ────────────────────────────────────────────────
 if (!TOKEN) {
