@@ -21,7 +21,7 @@ policy, by construction: a call that skipped the gateway would fail to resolve.
 | CPU | 4 cores, **with AVX** | 8 cores |
 | RAM | 8 GB | 16 GB |
 | Disk | 40 GB free | 100 GB SSD |
-| OS | Linux with Docker Engine 24+ and Compose v2.20+ | Ubuntu 22.04 / 24.04 LTS |
+| OS | Ubuntu 22.04+ or Windows (WSL2 + Docker Desktop); Docker Engine 24+, Compose v2.20+ | Ubuntu 24.04 LTS / Windows Server 2022 |
 
 **AVX is not optional and not a performance note.** MongoDB 5.0 and later are
 compiled with those instructions, so a CPU without them does not run the

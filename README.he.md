@@ -22,7 +22,7 @@
 | מעבד | 4 ליבות, **עם AVX** | 8 ליבות |
 | זיכרון | 8 ג׳יגה | 16 ג׳יגה |
 | דיסק | 40 ג׳יגה פנויים | 100 ג׳יגה SSD |
-| מערכת הפעלה | לינוקס עם Docker Engine 24+ ו-Compose v2.20+ | Ubuntu 22.04 / 24.04 LTS |
+| מערכת הפעלה | Ubuntu 22.04+ או Windows (WSL2 + Docker Desktop); Docker Engine 24+, Compose v2.20+ | Ubuntu 24.04 LTS / Windows Server 2022 |
 
 
 **AVX אינו אופציונלי, וזו אינה הערת ביצועים.** ‏MongoDB 5.0 ומעלה מהודרים עם
