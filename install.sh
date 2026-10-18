@@ -128,6 +128,33 @@ cmd_check() {
     fi
   done
 
+  # Optional: the Windows computer the payroll program runs on. Not known at
+  # check time unless IT says so (it is saved later, in the console), so this
+  # only runs with PAYROLL_PC set and never fails the check:
+  #   PAYROLL_PC=10.0.0.12 ./install.sh check
+  # 3389 is how the connector drives the program (Remote Desktop). 9010 is the
+  # small screen-reading helper the connector installs on that computer; without
+  # it every run still works, but reads the screen as a picture — slower, and a
+  # run that cannot reach it waits ~2.5 minutes at every start (measured on the
+  # demo, 2026-10-18). Both must be open on the Windows firewall AND any network
+  # firewall between this server and that computer.
+  if [ -n "${PAYROLL_PC:-}" ]; then
+    step "Payroll computer ($PAYROLL_PC) — optional"
+    local port label
+    for port in 3389 9010; do
+      label=$([ "$port" = 3389 ] && echo "Remote Desktop" || echo "screen-reading helper")
+      if timeout 4 bash -c "</dev/tcp/$PAYROLL_PC/$port" 2>/dev/null; then
+        ok "$PAYROLL_PC:$port ($label) is reachable"
+      elif [ "$port" = 3389 ]; then
+        warn "$PAYROLL_PC:3389 (Remote Desktop) did not answer — the connector cannot drive the payroll program until it does"
+      else
+        warn "$PAYROLL_PC:9010 (screen-reading helper) did not answer — runs will work but slower; allow this server's address on port 9010"
+      fi
+    done
+  else
+    say "  ${DIM}(optional: PAYROLL_PC=<address> ./install.sh check also tests the payroll computer)${OFF}"
+  fi
+
   step "Ports"
   for p in "${CONSOLE_PORT:-443}" "${ADMIN_PORT:-3300}"; do
     if command -v ss >/dev/null 2>&1 && ss -ltn 2>/dev/null | grep -q ":$p "; then

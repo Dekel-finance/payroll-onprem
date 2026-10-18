@@ -245,9 +245,19 @@ tests for this before anything is written.</p></div>
 <thead><tr><th>Direction</th><th>Port</th><th>Between</th></tr></thead><tbody>
 <tr><td>LAN, inbound to this server</td><td class="mono">443</td><td>staff browsers → the three applications</td></tr>
 <tr><td>LAN, outbound from this server</td><td class="mono">3389</td><td>connector → the Windows payroll machine. <strong>Never leaves your LAN</strong></td></tr>
+<tr><td>LAN, outbound from this server <em>(recommended)</em></td><td class="mono">9010</td><td>connector → the screen-reading helper on the same Windows machine. Optional, but much faster — see below</td></tr>
 <tr><td>Internet, outbound</td><td class="mono">443</td><td>this server → the destinations in §8</td></tr>
 <tr><td>Internet, inbound</td><td colspan="2"><strong>none, at any perimeter</strong></td></tr>
 </tbody></table></div>
+<div class="note"><p><strong>Port 9010 — the screen-reading helper.</strong> The connector installs a
+small, read-only helper on the payroll machine that tells it exactly where each
+field and button is. If this server cannot reach it, every run still works but
+reads the screen as a picture — slower, and each run waits about two and a half
+minutes at the start. Allow <em>this server's address only</em> on TCP 9010, both on
+the Windows firewall of the payroll machine and on any firewall in between:</p>
+<div class="code"><button class="copy" type="button">Copy</button><pre>New-NetFirewallRule -DisplayName "Dekel helper (9010)" -Direction Inbound -Protocol TCP -LocalPort 9010 -RemoteAddress &lt;this-server-ip&gt; -Action Allow</pre></div>
+<p>Then check both ports from this server: <code>PAYROLL_PC=&lt;payroll-machine-ip&gt; ./install.sh check</code>.
+The check is optional and never fails the install.</p></div>
 <p>Port <code>80</code> is needed only if you choose a publicly resolvable hostname
 and want an automatically issued certificate; see §6. On a private network it
 stays closed.</p>
@@ -715,9 +725,18 @@ system does not appear to have that!</code>, שורה שקל לפספס בתוך
 <thead><tr><th>כיוון</th><th>פורט</th><th>בין</th></tr></thead><tbody>
 <tr><td>רשת פנימית, נכנס לשרת</td><td class="mono">443</td><td>דפדפני העובדים ← שלוש האפליקציות</td></tr>
 <tr><td>רשת פנימית, יוצא מהשרת</td><td class="mono">3389</td><td>המחבר ← מכונת ה-Windows של מערכת השכר. <strong>לא יוצא מהרשת שלכם</strong></td></tr>
+<tr><td>רשת פנימית, יוצא מהשרת <em>(מומלץ)</em></td><td class="mono">9010</td><td>המחבר ← רכיב קריאת המסך באותה מכונת Windows. לא חובה, אבל מהיר בהרבה — ראו למטה</td></tr>
 <tr><td>אינטרנט, יוצא</td><td class="mono">443</td><td>השרת הזה ← היעדים שבפרק 8</td></tr>
 <tr><td>אינטרנט, נכנס</td><td colspan="2"><strong>אין, בשום נקודת גבול</strong></td></tr>
 </tbody></table></div>
+<div class="note"><p><strong>פורט 9010 — רכיב קריאת המסך.</strong> המחבר מתקין במכונת השכר רכיב קטן,
+לקריאה בלבד, שאומר לו בדיוק איפה כל שדה וכפתור. אם השרת לא מגיע אליו, כל הרצה
+עדיין עובדת אבל קוראת את המסך כתמונה — לאט יותר, וכל הרצה ממתינה כשתיים וחצי דקות
+בהתחלה. פתחו TCP 9010 <em>רק לכתובת של השרת הזה</em>, גם בחומת האש של Windows במכונת
+השכר וגם בכל חומת אש שבדרך:</p>
+<div class="code"><button class="copy" type="button">Copy</button><pre>New-NetFirewallRule -DisplayName "Dekel helper (9010)" -Direction Inbound -Protocol TCP -LocalPort 9010 -RemoteAddress &lt;this-server-ip&gt; -Action Allow</pre></div>
+<p>ואז בדקו את שני הפורטים מהשרת: <code>PAYROLL_PC=&lt;payroll-machine-ip&gt; ./install.sh check</code>.
+הבדיקה אופציונלית ולעולם לא עוצרת את ההתקנה.</p></div>
 <p>פורט <code>80</code> נדרש רק אם בחרתם בשם מתחם ציבורי ורוצים תעודה שמונפקת
 אוטומטית; ראו פרק 6. ברשת פרטית הוא נשאר סגור.</p>
 <h4>מה צריך להחליט מראש</h4>
