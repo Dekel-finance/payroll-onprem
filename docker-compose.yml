@@ -1,0 +1,635 @@
+# The on-prem bundle.
+#
+#     cd deploy/onprem
+#     cp .env.example .env      # fill it in — see the README
+#     docker compose up -d --build
+#
+# Six containers, one image (built once, run five times) plus Mongo.
+#
+# ## The network shape, which is the security design
+#
+# Two networks. `internal` carries everything and is marked `internal: true`, so
+# Docker installs no gateway route on it — a container attached only to that
+# network **cannot reach the internet at all**, regardless of what its code
+# tries. Mongo, the console apps and the admin live there.
+#
+# Exactly one container is also on `egress`: the gateway. It is the only process
+# in the bundle with a route out, which means the anonymizer is not a
+# convention that call sites are asked to honour — it is the only door. If a
+# future code path in the console forgets to use it and calls a vendor directly,
+# that call does not leak; it fails to connect.
+#
+# `metrics` is on `egress` too, because it pushes the rollup up. What it may
+# send is constrained by `apps/metrics/src/guard.ts`, which refuses to transmit
+# anything that is not a count, a code, a hash or a timestamp.
+
+name: payroll-onprem
+
+# ── Log rotation, on every container ──────────────────────────────────────────
+#
+# Docker's default `json-file` driver has NO ceiling. A container that logs
+# steadily fills `/var/lib/docker/containers` until the disk is full, and a full
+# disk on this box is not a degraded install — Mongo stops accepting writes,
+# Caddy cannot renew, and every screen reads as a broken application rather than
+# as a machine out of space. One customer install reached 99.9% of 115GB this
+# way, with nothing in the product saying so.
+#
+# So the cap is here rather than in a host-level daemon.json: the bundle is what
+# we ship, the host is the customer's. 50MB × 3 files is ~150MB per container,
+# ~2GB for a full install worst case, and still several days of history for a
+# service logging normally.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: ${LOG_MAX_SIZE:-50m}
+    max-file: "${LOG_MAX_FILES:-3}"
+
+x-image: &image
+  # Pulled, not built. The published image is the artefact you are running; there
+  # is no source tree on this machine and there does not need to be.
+  #
+  # A local name. images.sh pulls the image from the registry the broker names
+  # and retags it as payroll.invalid/...; compose itself never pulls it
+  # (`never`). `.invalid` is a reserved domain, so this name cannot be fetched
+  # from Docker Hub or anywhere else by mistake.
+  image: ${PAYROLL_IMAGE:-payroll.invalid/payroll-onprem}:${BUNDLE_VERSION:-stable}
+  pull_policy: never
+  restart: unless-stopped
+  logging: *logging
+  env_file: .env
+
+# Shared by the three Next apps: the database, and — the important part — the
+# gateway as the only model endpoint they know about.
+x-app-env: &app-env
+  DEPLOY_TARGET: ${DEPLOY_TARGET:-onprem}
+  # These containers are on `internal` only and cannot reach Better Stack, so
+  # their own logs and spans go out through the gateway — the same door, and the
+  # same token, as every model call. The alternative was attaching them to
+  # `egress`, which trades the containment guarantee for a log line.
+  TELEMETRY_FORWARD_URL: http://gateway:8090
+  TELEMETRY_FORWARD_TOKEN: ${GATEWAY_TOKEN:?set GATEWAY_TOKEN in .env}
+  MONGODB_URI: mongodb://mongo:27017
+  MONGODB_DB: ${MONGODB_DB:-payroll}
+  # One name, one meaning: the gateway, and nothing else. Every call site in the
+  # repo (packages/core/src/model-endpoints.ts, packages/core/src/complete.ts)
+  # reads this pair — whether it goes raw over the Anthropic wire or
+  # prompt-by-reference to the broker. Pointing it here is what puts the
+  # pseudonymizer in front of every model call.
+  #
+  # The apps authenticate to the gateway, not to the vendor. They hold no
+  # vendor key at all — the gateway substitutes its own, so a compromised
+  # console cannot spend the model budget or bypass the audit. The app has
+  # neither the prompt nor a credential for the broker — only this token.
+  GATEWAY_URL: http://gateway:8090
+  GATEWAY_TOKEN: ${GATEWAY_TOKEN:?set GATEWAY_TOKEN in .env}
+  # Outbound mail, by the same argument and through the same door. These apps
+  # hold no Resend key — deliberately, because a credential that can send mail
+  # as the bureau does not belong in a `.env` on a payroll server — so a reply
+  # is described to the gateway and sent by us under the bureau's own verified
+  # domain. `packages/core/src/mail-transport.ts` makes the choice once, from
+  # DEPLOY_TARGET, so no call site knows which deployment it is running in.
+  # Named for the door, not for the destination: an app reaches the gateway, and
+  # the gateway's own MAIL_RELAY_URL is the second hop to our control plane.
+  MAIL_GATEWAY_URL: http://gateway:8090
+  MAIL_GATEWAY_TOKEN: ${GATEWAY_TOKEN:?set GATEWAY_TOKEN in .env}
+  # The ת"ז keyring. Every app that reads or writes an employee needs it —
+  # `packages/core/src/national-id.ts` throws on the first identity it touches
+  # without it, which in practice is the first page that lists an employee. It
+  # belongs to every app service here: the bundle previously
+  # asked for a `NATIONAL_ID_PEPPER` that nothing in the tree reads any more,
+  # so an install could satisfy every required variable and still fail.
+  NATIONAL_ID_KEYS: ${NATIONAL_ID_KEYS:?set NATIONAL_ID_KEYS in .env}
+  NATIONAL_ID_ACTIVE_KEY: ${NATIONAL_ID_ACTIVE_KEY:-}
+  # The keyring for stored customer credentials — the payroll server's RDP
+  # password the office types into settings. Without it the connection details
+  # cannot be saved; blank rather than required so an install predating it
+  # still boots, and the settings screen names the missing key instead of the
+  # stack failing to come up. Same custody rule as NATIONAL_ID_KEYS.
+  SECRET_KEYS: ${SECRET_KEYS:-}
+  SECRET_ACTIVE_KEY: ${SECRET_ACTIVE_KEY:-}
+
+services:
+  mongo:
+    # MONGO_VERSION is set once, at install: 8, or 4.4 on a CPU without AVX.
+    # Never change it on an existing database — 8 does not open 4.4 data
+    # directly, and 4.4 does not open 8 data at all.
+    image: mongo:${MONGO_VERSION:-8}
+    logging: *logging
+    restart: unless-stopped
+    networks: [internal]
+    volumes:
+      - mongo-data:/data/db
+      # A backup target the bureau's own regime can pick up, per
+      # docs/on-prem-architecture.md §6.6.
+      - ${BACKUP_DIR:-./backups}:/backups
+    command: ["--bind_ip_all"]
+    healthcheck:
+      # A ping rather than a port check: an accepting socket is not a ready
+      # database, and the apps' first query happens on the first request.
+      # `mongosh` on 6+, the legacy `mongo` shell on 4.4 (which has no mongosh).
+      test:
+        - CMD-SHELL
+        - mongosh --quiet --eval 'db.adminCommand("ping").ok' 2>/dev/null || mongo --quiet --eval 'db.adminCommand("ping").ok'
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # ── The only container with a route to the internet ────────────────────────
+  gateway:
+    <<: *image
+    environment:
+      # Prompts and vendor keys live in our cloud; this is the hop to them.
+      # Only the gateway holds these — no app container can reach the broker.
+      BROKER_URL: ${BROKER_URL:-}
+      BROKER_TOKEN: ${BROKER_TOKEN:-}
+      SERVICE: gateway
+      DEPLOY_TARGET: ${DEPLOY_TARGET:-onprem}
+      GATEWAY_PORT: "8090"
+      MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DB: ${MONGODB_DB:-payroll}
+      GATEWAY_TOKEN: ${GATEWAY_TOKEN:?set GATEWAY_TOKEN in .env}
+      GATEWAY_MODE: ${GATEWAY_MODE:-enforce}
+      GATEWAY_KINDS: ${GATEWAY_KINDS:-email,id,phone,person,org}
+      GATEWAY_ATTACHMENTS: ${GATEWAY_ATTACHMENTS:-block}
+      # ── Mail ────────────────────────────────────────────────────────────
+      # The install has no inbound path at any perimeter — that is the thing we
+      # sell — so mail cannot be pushed to it. The gateway long-polls the
+      # control plane for deliveries parked there, opens each with the private
+      # key below, and hands it to the console over `internal`. It carries this
+      # job because it is the only container with a route out; putting the
+      # poller anywhere else would mean a second container on `egress`.
+      MAIL_INBOUND_MODE: ${MAIL_INBOUND_MODE:-off}
+      # Both default to the metrics container's values: one identity per
+      # install, not two that can be set inconsistently.
+      MAIL_RELAY_URL: ${MAIL_RELAY_URL:-${METRICS_CONTROL_PLANE_URL:-}}
+      MAIL_INSTALL_ID: ${MAIL_INSTALL_ID:-${METRICS_INSTALL_ID:-}}
+      MAIL_INSTALL_TOKEN: ${MAIL_INSTALL_TOKEN:-${METRICS_INSTALL_TOKEN:-}}
+      # The half of the pair we never hold. Generated by
+      # `node deploy/onprem/generate-mail-key.mjs`; the gateway publishes the
+      # public half itself at boot, so at no point do both halves exist in one
+      # place. An install that loses this cannot read its parked mail and
+      # cannot be helped to.
+      MAIL_INSTALL_PRIVATE_KEY: ${MAIL_INSTALL_PRIVATE_KEY:-}
+      MAIL_RELAY_POLL_WAIT_SEC: ${MAIL_RELAY_POLL_WAIT_SEC:-25}
+      # Where a collected delivery is handed in. The console runs the same
+      # `handleInboundEmail` the hosted webhook does, so a month opened on a
+      # bureau's own hardware is the same month.
+      MAIL_DELIVER_URL: http://console:3201
+      MAIL_DELIVER_TOKEN: ${INTERNAL_TOKEN:?set INTERNAL_TOKEN in .env}
+      # The office's OWN mailbox, reached from here because nothing else can
+      # reach anything. A different thing from the relay above and not an
+      # alternative to it: that one carries what arrives at the address we
+      # minted, this one what arrives at the address the bureau's clients
+      # already use. An install with both keeps receiving on both.
+      #
+      # On by default, and it opens nothing on its own: the gateway will not
+      # dial until an app on `internal` hands it a credential for a host on the
+      # list, which only happens after an office connects its mailbox in the
+      # console. `off` forbids it install-wide.
+      MAILBOX_EGRESS: ${MAILBOX_EGRESS:-on}
+      # Only for a provider that is not Google or Microsoft. Exact hosts,
+      # comma-separated — the list is the control, so it is never a suffix.
+      MAILBOX_ALLOWED_HOSTS: ${MAILBOX_ALLOWED_HOSTS:-}
+    volumes:
+      # Read-only. The support bundle can include the connector's screenshots
+      # and screen recordings from here (apps/gateway/src/support-media.ts).
+      - michpal-artifacts:/var/lib/michpal/artifacts:ro
+    networks: [internal, egress, support]
+    depends_on:
+      mongo: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8090/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+
+  metrics:
+    <<: *image
+    environment:
+      SERVICE: metrics
+      DEPLOY_TARGET: ${DEPLOY_TARGET:-onprem}
+      METRICS_PORT: "8091"
+      MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DB: ${MONGODB_DB:-payroll}
+      METRICS_INSTALL_ID: ${METRICS_INSTALL_ID:?set METRICS_INSTALL_ID in .env}
+      # Which copy of this install, and where it answers. Both reach the
+      # container through `env_file` anyway; they are named here because a
+      # telemetry row that cannot say which box and which environment it came
+      # from is a row nobody can act on, and that should not depend on an
+      # inherited variable somebody could remove without noticing.
+      METRICS_ENVIRONMENT: ${METRICS_ENVIRONMENT:-production}
+      METRICS_SITE_ADDRESS: ${METRICS_SITE_ADDRESS:-${SITE_ADDRESS:-}}
+      METRICS_CONTROL_PLANE_URL: ${METRICS_CONTROL_PLANE_URL:-}
+      METRICS_INSTALL_TOKEN: ${METRICS_INSTALL_TOKEN:-}
+      METRICS_HASH_SALT: ${METRICS_HASH_SALT:-}
+      # The fleet dashboard. Same rollup, same guard, one Better Stack source
+      # shared with the hosted deployment — `deployTarget` is what tells the two
+      # apart, which is what makes a cloud-vs-on-prem comparison a GROUP BY
+      # rather than a join across two datasets.
+      BETTERSTACK_INGEST_HOST: ${BETTERSTACK_INGEST_HOST:-}
+      BETTERSTACK_SOURCE_TOKEN: ${BETTERSTACK_SOURCE_TOKEN:-}
+      BETTERSTACK_HEARTBEAT_URL: ${BETTERSTACK_HEARTBEAT_URL:-}
+    networks: [internal, egress]
+    depends_on:
+      mongo: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8091/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ── The UI. No route to the internet; model calls go via the gateway ───────
+  # One console, serving on 3201. It kept the service name `console` through the
+  # v1 retirement so CONSOLE_URL and every depends_on below still resolve; only
+  # the port moved, because the app behind it is the one that used to be v2.
+  console:
+    <<: *image
+    environment:
+      <<: *app-env
+      # The container is `console`; the APP is console-v2, and the cloud half of
+      # it reports under that name. One app, one service, or every chart that
+      # compares cloud with on-prem is comparing two names for one thing.
+      TELEMETRY_SERVICE: console-v2
+      SERVICE: console
+      ADMIN_URL: http://admin:3300
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?set INTERNAL_TOKEN in .env}
+      # The PI agent, for the workflow step that hands a finished month to it
+      # (`attendance:handToAgent`) — same container network, same shared token.
+      AGENT_URL: http://agent:8080
+      AGENT_WEBHOOK_TOKEN: ${INTERNAL_TOKEN:?set INTERNAL_TOKEN in .env}
+      # The payroll connector — OUR infrastructure, not the customer's, and
+      # therefore not in this bundle. It drives a Windows desktop over RDP on a
+      # VM we run, and the console reaches it the same way the hosted deployment
+      # does: by URL and bearer, over HTTPS. Blank unless this install uses one.
+      #
+      # `resolveWorker()` fails CLOSED (PAY-66): an agency with no row in
+      # `console_michpal_workers` is refused rather than falling back here, and
+      # only the ids in MICHPAL_SHARED_WORKER_AGENCY_IDS may use this shared
+      # entry.
+      MICHPAL_WORKER_URL: ${MICHPAL_WORKER_URL:-}
+      MICHPAL_WORKER_TOKEN: ${WORKER_TOKEN:-}
+      MICHPAL_SHARED_WORKER_AGENCY_IDS: ${MICHPAL_SHARED_WORKER_AGENCY_IDS:-}
+      # Onboarding documents, chat uploads and the run/audit trail. On-prem
+      # `storage.ts` writes these to disk whatever else is configured, and
+      # without this they land inside the container — gone on the next `up
+      # --build`, and unwritable anyway because the app does not own /app.
+      CONSOLE_DATA_DIR: /var/lib/payroll/console
+    volumes:
+      - console-files:/var/lib/payroll/console
+    networks: [internal]
+    depends_on:
+      mongo: {condition: service_healthy}
+      gateway: {condition: service_started}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3201/api/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+
+  admin:
+    <<: *image
+    environment:
+      <<: *app-env
+      TELEMETRY_SERVICE: admin
+      SERVICE: admin
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?set INTERNAL_TOKEN in .env}
+    networks: [internal]
+    depends_on:
+      mongo: {condition: service_healthy}
+      gateway: {condition: service_started}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3300/api/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+  agent:
+    <<: *image
+    environment:
+      <<: *app-env
+      TELEMETRY_SERVICE: agent
+      SERVICE: agent
+      AGENT_PORT: "8080"
+      AGENT_WEBHOOK_TOKEN: ${INTERNAL_TOKEN:?set INTERNAL_TOKEN in .env}
+      PAYROLL_ADMIN_URL: http://admin:3300
+    # pi's conversations and the month's attachments (/app/.data). In the
+    # container layer they died with every auto-update, so a month started
+    # before a release lost its conversation and its 101 (demo, 2026-10-19).
+    volumes:
+      - agent-data:/app/.data
+    # Never restarted mid-turn: a restart cuts the visitor's stream and loses
+    # the reply. update.sh asks /health first and skips the agent while it
+    # reports busy; the next operator cycle retries (images.sh, busy_services).
+    networks: [internal]
+    depends_on:
+      mongo: {condition: service_healthy}
+      gateway: {condition: service_started}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ── The on-prem cron ──────────────────────────────────────────────────────
+  #
+  # Nothing periodic in the product runs itself: each job is a route something
+  # has to call, and in the hosted deployment that something is Vercel Cron,
+  # which does not exist here. Without this container every screen works, every
+  # health check is green, and the monitor and the policy check silently never
+  # run.
+  scheduler:
+    <<: *image
+    environment:
+      SERVICE: scheduler
+      TELEMETRY_SERVICE: scheduler
+      DEPLOY_TARGET: ${DEPLOY_TARGET:-onprem}
+      SCHEDULER_PORT: "8092"
+      # The scheduled routes check `Authorization: Bearer $CRON_SECRET`.
+      CRON_SECRET: ${CRON_SECRET:?set CRON_SECRET in .env}
+      CONSOLE_URL: http://console:3201
+      ADMIN_INTERNAL_URL: http://admin:3300
+      SCHEDULER_JOBS: ${SCHEDULER_JOBS:-}
+    networks: [internal]
+    depends_on:
+      admin: {condition: service_started}
+      console: {condition: service_started}
+    healthcheck:
+      # Returns 503 when a job has stopped succeeding, so a queue that stopped
+      # draining is visible from `docker compose ps` rather than from an
+      # employee eventually mentioning that no reminder arrived.
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8092/health"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  # ── The Michpal connector — only for installs with a Windows box ──────────
+  #
+  # On-prem the install IS the connector: this bundle sits inside the office
+  # network, so the RDP hop starts here rather than on a VM of ours. Always on,
+  # not a profile — an office installs on-prem BECAUSE there is a payroll
+  # machine on the LAN to drive, and the opt-in profile produced installs where
+  # every container was green and no payroll could ever run. A connector that
+  # boots unbound is the normal first state: the office enters the server's
+  # address and login in the console's settings screen, which proves the login
+  # before anything is saved.
+  #
+  # Updated by the operator with a busy guard (see the note at its healthcheck).
+  # update.sh re-runs register-install.mjs (idempotent) so the console's
+  # routing row points at http://michpal-worker:8080.
+  # A named volume is created root-owned on first use, but guacd's rdpdr
+  # channel writes as uid 1000 (see `guacd` below) — a fresh `/drive` refuses
+  # every file Michpal saves to it ("File open refused") until it is chowned.
+  # One-shot and idempotent, so every install (and every fresh volume) gets a
+  # writable drive with no manual step, instead of a customer running `chown`
+  # by hand.
+  drive-init:
+    image: busybox
+    command: ["chown", "1000:1000", "/drive"]
+    volumes:
+      - michpal-drive:/drive
+
+  guacd:
+    image: guacamole/guacd:1.5.5
+    logging: *logging
+    restart: unless-stopped
+    depends_on:
+      drive-init:
+        condition: service_completed_successfully
+    # `internal` so the worker can reach it, and `lan` because guacd is the
+    # process that actually opens the RDP socket to the Windows box. On the
+    # internal network alone that dial cannot leave the host.
+    networks: [internal, lan]
+    volumes:
+      # guacd is what actually mounts the DEKEL drive into the RDP session
+      # (`drive-path` in guacbridge/main.go) — it writes what Michpal saves
+      # to ITS OWN filesystem, not the worker's. Without this shared with
+      # `michpal-worker` below at the same path, every file Michpal "saves"
+      # to the drive lands here and is invisible to `collectDrivePdfs`,
+      # which silently sees an empty (or missing) directory forever.
+      - michpal-drive:/drive
+
+  michpal-worker:
+    # Local name, as for the app image above.
+    image: ${CONNECTOR_IMAGE:-payroll.invalid/payroll-michpal-worker}:${BUNDLE_VERSION:-stable}
+    pull_policy: never
+    logging: *logging
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      WORKER_TOKEN: ${WORKER_TOKEN:?set WORKER_TOKEN in .env}
+      BRIDGE: http://127.0.0.1:8931
+      GUACD: ${GUACD:-guacd:4822}
+      # Recordings and payslip PDFs to a local volume, served back from this
+      # worker under its own bearer — never a public host.
+      DEPLOY_TARGET: onprem
+      MICHPAL_STORAGE: disk
+      ARTIFACT_DIR: /var/lib/michpal/artifacts
+      ARTIFACT_BASE: http://michpal-worker:8080
+      # Its AI fallback goes through the gateway like everything else. The
+      # computer-use agent reads these two names (agent.mjs refuses to start
+      # without them, and refuses to run at all if a vendor key is present).
+      # The only door this container can reach: the agent speaks the Anthropic
+      # wire, the gateway checks the token on x-api-key, strips it, and forwards
+      # to the broker's /v1/agent. ANTHROPIC_* here would be dead config the
+      # worker no longer reads.
+      GATEWAY_URL: http://gateway:8090
+      GATEWAY_TOKEN: ${GATEWAY_TOKEN:?set GATEWAY_TOKEN in .env}
+      # The Windows box this connector drives. OPTIONAL at boot: the office
+      # enters host/port/user/password in the console's settings screen, which
+      # probes with the submitted values — a connector that boots unbound is
+      # the normal first state, not an error.
+      RDP_HOST: ${RDP_HOST:-}
+      RDP_USER: ${RDP_USER:-}
+      RDP_PASS: ${RDP_PASS:-}
+      # Best-effort guess (`\\tsclient\<DRIVE_NAME>`) for how the redirected
+      # DEKEL drive resolves on the Windows side of THIS session — see the
+      # doc comment on `archivePathStep` in payslip-archive.ts. Unconfirmed
+      # on a live screen; override here if the typed path is rejected.
+      MICHPAL_ARCHIVE_BASE_PATH: ${MICHPAL_ARCHIVE_BASE_PATH:-}
+    volumes:
+      - michpal-artifacts:/var/lib/michpal/artifacts
+      - michpal-drive:/drive
+      # Local mode — Michpal on the same Windows PC as this install (WSL2), no
+      # RDP. The worker starts its bridge on the Windows desktop through WSL
+      # interop, which needs these three from the WSL host; `install.sh` sets
+      # them only when it runs on WSL. Elsewhere they mount empty placeholders
+      # and the console's "installed on this computer" check says so.
+      # See services/michpal-worker/src/local-bridge.ts.
+      - ${WSL_INTEROP_DIR:-./.no-wsl}:/run/WSL
+      - ${WSL_INIT:-/dev/null}:/init:ro
+      - ${WSL_POWERSHELL_DIR:-./.no-wsl}:/mnt/c/Windows/System32/WindowsPowerShell/v1.0:ro
+    # `lan` is a routable bridge — the Windows box is on the office LAN, which
+    # `internal` deliberately cannot reach. This is the one documented hole in
+    # the no-egress property, and it is the price of driving a desktop: the
+    # console apps stay sealed, this container does not.
+    networks: [internal, lan]
+    depends_on:
+      guacd: {condition: service_started}
+      gateway: {condition: service_started}
+    healthcheck:
+      # node, not curl: the connector image carries the RDP/ffmpeg stack and no
+      # curl at all, so the probe every other service uses can never pass here.
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8080/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # Updated with every release like the other services, but never mid-run:
+    # update.sh skips it while /health reports busy, and the next operator
+    # cycle retries. Until 1.3.38 the connector was pulled only when a release
+    # changed a kit file, so worker fixes never reached customers (2026-10-18).
+
+  caddy:
+    image: caddy:2
+    logging: *logging
+    restart: unless-stopped
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+      CONSOLE_PORT: ${CONSOLE_PORT:-443}
+      ADMIN_PORT: ${ADMIN_PORT:-4301}
+    ports:
+      - "${CONSOLE_PORT:-443}:${CONSOLE_PORT:-443}"
+      # The admin app is OUR backoffice, not part of what a bureau buys: it
+      # shows commercial fields (pricing bands, ARR), AI spend and internal
+      # controls, and its API routes are all `requireAdmin`. So the port is
+      # bound to LOOPBACK by default — the container is running and every
+      # service that talks to it over the `internal` network is unaffected,
+      # but no browser on the bureau's LAN can reach it.
+      #
+      # We reach it with a tunnel:  ssh -L 4301:127.0.0.1:4301 <host>
+      # then https://localhost:4301 (Caddy answers with its internal cert).
+      #
+      # `ADMIN_BIND=0.0.0.0` publishes it normally. That is for boxes that are
+      # ours — cloud.dekel.io, the demo VM — never for a customer install.
+      - "${ADMIN_BIND:-127.0.0.1}:${ADMIN_PORT:-4301}:${ADMIN_PORT:-4301}"
+      # ACME's HTTP-01 challenge, and nothing else. A LAN install never performs
+      # one, so it sets ACME_PORT=0 and Docker picks an unused port — claiming
+      # :80 on a server that already runs something there fails an install that
+      # was otherwise fine.
+      - "${ACME_PORT:-80}:80"
+    volumes:
+      - ./${CADDYFILE:-Caddyfile.lan}:/etc/caddy/Caddyfile:ro
+      # The issued certificate, and for the LAN mode the CA itself. Losing this
+      # volume means every browser has to trust a new CA.
+      - caddy-data:/data
+    networks: [internal, egress]
+    depends_on:
+      console: {condition: service_started}
+      admin: {condition: service_started}
+
+  # ── Unattended updates: the operator ───────────────────────────────────
+  #
+  # Every AUTO_UPDATE_INTERVAL seconds operator.sh asks the broker which
+  # version this install's channel serves. If the running containers already
+  # carry it, nothing else happens — no registry call. If not, it pulls the
+  # app and connector images (under their local names), syncs the kit that
+  # rides in the image under /app/kit, and runs update.sh (env-key
+  # migrations, `compose up -d --remove-orphans`, the idempotent row reseed).
+  # So a release can add or remove services, not only swap images, with
+  # nobody at the keyboard.
+  #
+  # **Never mid-run.** update.sh asks the agent's and the connector's /health
+  # first and leaves a busy one on its old version; the next cycle sees the
+  # mixed versions and retries.
+  #
+  # **It follows a channel.** `stable` moves when a release is blessed; `edge`
+  # carries `<VERSION>-edge` and only changes when VERSION is bumped.
+  #
+  # **Mongo, Caddy and guacd are never touched by it.** A database upgrade is a
+  # data migration, and one that happens at 03:00 because an image moved is the
+  # failure this bundle is arranged to avoid.
+  #
+  # **It has the Docker socket, and that is a real cost.** Anything holding this
+  # socket can start a privileged container, so it is root on the host in
+  # practice — on a machine holding payroll data that is worth saying out loud
+  # rather than burying. It buys unattended security patching, which for a box
+  # nobody logs into is usually the larger risk. A bureau that disagrees sets
+  # AUTO_UPDATE_MONITOR_ONLY=true (it reports and changes nothing) or stops the
+  # container; `./install.sh update` then does the same job by hand.
+  #
+  # KIT_DIR is this directory's HOST path (install.sh writes it to .env):
+  # mounted at the same path inside, so the compose invocations it makes
+  # resolve ./Caddyfile, ./.env and the project name exactly as they do from a
+  # shell on the host. Settings are read from .env on every cycle.
+  operator:
+    image: docker:27-cli
+    logging: *logging
+    restart: unless-stopped
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        while true; do
+          sh "$$KIT_DIR/operator.sh" || echo "operator: cycle failed — retrying next interval"
+          sleep "$${INTERVAL:-600}"
+        done
+    environment:
+      KIT_DIR: ${KIT_DIR:?run ./install.sh update once — it writes KIT_DIR to .env}
+      INTERVAL: ${AUTO_UPDATE_INTERVAL:-600}
+    working_dir: ${KIT_DIR:-/kit}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${KIT_DIR:-.}:${KIT_DIR:-/kit}
+    # `egress` to reach the broker and the registry. Deliberately NOT
+    # `internal`: it has no business talking to the applications or the
+    # database, and it already holds the Docker socket.
+    networks: [egress]
+
+  # Read-only Docker API for support bundles (docs/onprem-support-bundle.md).
+  # The gateway reads container logs through it when the owner presses
+  # "הורדת חבילת תמיכה" in the console. Our own code
+  # (apps/gateway/src/docker-logs-proxy.ts): it forwards GET for container
+  # list, inspect and logs, version and info — nothing else. No exec, no
+  # start/stop, no /archive (file copy). Only the gateway is on `support`;
+  # keep every other service off it.
+  #
+  # Same image, but NOT the &image anchor: no env_file, so the one process
+  # holding the Docker socket has none of this install's secrets. Root only to
+  # open the socket; no capabilities, read-only filesystem.
+  # No `no-new-privileges`: on the LAN box (Ubuntu, AppArmor) it made every
+  # exec fail with "operation not permitted", tini and node alike.
+  docker-logs:
+    image: ${PAYROLL_IMAGE:-payroll.invalid/payroll-onprem}:${BUNDLE_VERSION:-stable}
+    pull_policy: never
+    restart: unless-stopped
+    logging: *logging
+    user: root
+    read_only: true
+    cap_drop: [ALL]
+    environment:
+      SERVICE: docker-logs
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [support]
+
+networks:
+  # No gateway route is installed on this network. A container attached only to
+  # it cannot reach the internet even if its code tries to — which is what makes
+  # the gateway the only door rather than the recommended one.
+  internal:
+    internal: true
+  # The gateway and docker-logs only. No route out.
+  support:
+    internal: true
+  egress:
+  # Routable bridge for the michpal profile only: guacd dials the Windows box
+  # on the office LAN from here. Containers on `internal` alone cannot.
+  lan:
+
+volumes:
+  caddy-data:
+  mongo-data:
+  agent-data:
+  console-files:
+  michpal-artifacts:
+  michpal-drive:
