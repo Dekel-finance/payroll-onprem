@@ -381,50 +381,22 @@ EOF
   ok "wrote .env — ${BOLD}back this file up now${OFF}"
 }
 
-# Keys a NEWER bundle needs that an older .env predates. Appended only when
-# missing — an existing value is never touched, because two of these seal data
-# at rest. update.sh applies the same set from inside the operator container;
-# this covers the hand-run path.
-ensure_env() {
-  grep -q "^$1=" "$ENV_FILE" 2>/dev/null || { printf '%s=%s\n' "$1" "$2" >> "$ENV_FILE"; ok "added $1 to .env"; }
-}
-
-# What `.env` currently says, or empty. A key that is PRESENT AND BLANK is the
-# case `ensure_env` cannot see — it only appends a missing line — and it is the
-# case that actually occurs, because `write_env` writes every key on the first
-# run whether or not it had a value to put in it.
-env_value() {
-  [ -f "$ENV_FILE" ] || return 0
-  sed -n "s/^$1=//p" "$ENV_FILE" | head -1
-}
-
-# Set a key that exists but is blank. Never overwrites a value that is there:
-# an install's credentials are not ours to replace on an update.
-fill_blank_env() {
-  local key="$1" value="$2"
-  [ -n "$value" ] || return 0
-  [ -z "$(env_value "$key")" ] || return 0
-  if grep -q "^$key=" "$ENV_FILE" 2>/dev/null; then
-    # A temp file rather than `sed -i`: BSD and GNU disagree about its argument
-    # and this script runs on both.
-    sed "s|^$key=.*|$key=$value|" "$ENV_FILE" > "$ENV_FILE.tmp" && mv "$ENV_FILE.tmp" "$ENV_FILE"
-  else
-    printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
-  fi
-  ok "filled $key in .env"
-}
-
+# Keys a NEWER bundle needs that an older .env predates, and the install token
+# copied between BROKER_TOKEN and METRICS_INSTALL_TOKEN: images.sh
+# (migrate_env), the same copy update.sh runs on every operator update. This
+# adds only what a host can know (WSL) and says, in words, what a missing
+# token costs.
 ensure_env_keys() {
   [ -f "$ENV_FILE" ] || return 0
-  ensure_env WORKER_TOKEN "$(rand_hex)"
-  ensure_env SECRET_KEYS "v1:$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n')"
-  ensure_env SECRET_ACTIVE_KEY "v1"
-  # The operator mounts this directory at its own host path; compose inside the
-  # container then resolves ./Caddyfile, .env and the project name identically.
-  ensure_env KIT_DIR "$HERE"
-  pin_mongo_version
+  local line
+  migrate_env | while IFS= read -r line; do ok "$line"; done
   ensure_wsl_env
-  ensure_install_credential
+  if [ -z "$(kit_env BROKER_TOKEN)" ]; then
+    warn "this install has no credential from Dekel, so everything the AI does will refuse."
+    say "  ${DIM}Employee import, answering and the payroll agent all fail at the gateway.${OFF}"
+    say "  ${DIM}Ask Dekel for the install token, put it in .env as BROKER_TOKEN and${OFF}"
+    say "  ${DIM}METRICS_INSTALL_TOKEN, then run ./install.sh update again.${OFF}"
+  fi
 }
 
 # Local mode — Michpal on the same Windows PC as this install. The connector
@@ -435,45 +407,10 @@ ensure_env_keys() {
 ensure_wsl_env() {
   grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null || return 0
   local ps=/mnt/c/Windows/System32/WindowsPowerShell/v1.0
-  [ -d /run/WSL ] && ensure_env WSL_INTEROP_DIR /run/WSL
-  [ -e /init ] && ensure_env WSL_INIT /init
-  [ -d "$ps" ] && ensure_env WSL_POWERSHELL_DIR "$ps"
+  [ -d /run/WSL ] && kit_env_ensure WSL_INTEROP_DIR /run/WSL
+  [ -e /init ] && kit_env_ensure WSL_INIT /init
+  [ -d "$ps" ] && kit_env_ensure WSL_POWERSHELL_DIR "$ps"
   return 0
-}
-
-# ── The install credential, repaired on every update ─────────────────────────
-#
-# `BROKER_TOKEN` and `METRICS_INSTALL_TOKEN` are the SAME credential — the one
-# we issue with the install — written by `write_env` from `$INSTALL_TOKEN`. An
-# install run without that variable exported gets both lines, both blank, and
-# **comes up entirely healthy**: the containers start, the console serves, the
-# database is fine. Only the model path is dead, and it fails at the gateway
-# with a 502 that the person importing employees sees as the agent exiting 1.
-#
-# It went unnoticed because nothing connects the two facts. So:
-#   • if either one has the credential, the other is filled from it — which
-#     repairs the common case, where one was pasted and the other was not;
-#   • if neither has it, the update SAYS so, in the sentence that names the
-#     consequence rather than the variable.
-#
-# Never generated. It is a credential we issue, and a random value here would
-# turn a refusal that names its cause into an authentication failure that does
-# not.
-ensure_install_credential() {
-  local broker metrics
-  broker="$(env_value BROKER_TOKEN)"
-  metrics="$(env_value METRICS_INSTALL_TOKEN)"
-
-  [ -n "$broker" ] && fill_blank_env METRICS_INSTALL_TOKEN "$broker"
-  [ -n "$metrics" ] && fill_blank_env BROKER_TOKEN "$metrics"
-  [ -n "${INSTALL_TOKEN:-}" ] && { fill_blank_env BROKER_TOKEN "$INSTALL_TOKEN"; fill_blank_env METRICS_INSTALL_TOKEN "$INSTALL_TOKEN"; }
-
-  if [ -z "$(env_value BROKER_TOKEN)" ]; then
-    warn "this install has no credential from Dekel, so everything the AI does will refuse."
-    say "  ${DIM}Employee import, answering and the payroll agent all fail at the gateway.${OFF}"
-    say "  ${DIM}Ask Dekel for the install token, put it in .env as BROKER_TOKEN and${OFF}"
-    say "  ${DIM}METRICS_INSTALL_TOKEN, then run ./install.sh update again.${OFF}"
-  fi
 }
 
 # One compose file, no profiles: the connector is part of the bundle (an
@@ -622,33 +559,25 @@ disk_line() {
 }
 
 cmd_update() {
-  ensure_env_keys
   # Before the pull, not after: an update on a full disk half-writes an image
   # layer and leaves the install in a worse state than not updating at all.
   disk_line
-  # shellcheck disable=SC1090
-  set -a && . "$ENV_FILE" && set +a
-  step "Pulling ${BUNDLE_VERSION:-stable}"
-  pull_release
-  # The operator never restarts these mid-run; a hand-run update does, so say so.
-  local busy; busy="$(busy_services | tr '\n' ' ')"
-  [ -z "$busy" ] || warn "running a job now: ${busy}— this update restarts it and ends that run"
-  # Third-party images (mongo, caddy, guacd). Ours are `pull_policy: never`
-  # and compose skips them.
-  dc pull --quiet --ignore-pull-failures || warn "some images could not be refreshed — continuing with the local ones"
-  # `--remove-orphans`: a service a release removed is stopped, not left
-  # running for ever. Volumes are never touched — data outlives topology.
-  # Run from the host, this also recreates the operator when its definition
-  # changed (the operator never recreates itself).
-  dc up -d --remove-orphans
-  remove_legacy_images
+  ensure_wsl_env
+  step "Updating ($(kit_channel))"
+  # The update itself is update.sh — the same steps the operator runs, so a
+  # hand-run update and an unattended one cannot drift apart: .env keys and the
+  # install token, the images through the broker (always pulled when run from
+  # here), `compose up`, the reseed, old images out. Like the operator, it
+  # leaves a busy agent or connector on its old version; the next operator
+  # cycle finishes it.
+  sh ./update.sh || die "the update did not complete — see the lines above, then run ./install.sh update again"
+  # The one thing update.sh never does, because it may be running inside the
+  # operator: recreate the operator when its definition changed. From the host
+  # that is safe.
+  dc up -d --no-deps operator
   ok "updated — your data was not touched"
-  # Idempotent, and repairs as much as it registers: the routing row the
-  # console resolves (including one an older installer seeded broken).
+  # The first user and the install-token check against the control plane.
   cmd_bootstrap
-  # From here on the `operator` service does this whole command by itself:
-  # every release carries its own kit, and the operator syncs and applies it.
-  # Running this by hand remains equivalent, never required.
   cmd_status
 }
 

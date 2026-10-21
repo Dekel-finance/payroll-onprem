@@ -1,10 +1,11 @@
 #!/bin/sh
 # update.sh — apply THIS kit to the running install.
 #
-# The release's own migration step. It runs in two places and must work in
-# both: on the host via `./install.sh update`, and inside the `operator`
-# container after it syncs a newer kit out of the release image. Plain POSIX
-# sh, no bash-isms, nothing but docker + coreutils.
+# The release's own migration step, and the ONE copy of it. It runs in three
+# places and must work in all: inside the `operator` container after it syncs
+# a newer kit out of the release image, on the host from `./install.sh update`
+# (which adds only host-side steps around it), and on the demo box from the
+# promote. Plain POSIX sh, no bash-isms, nothing but docker + coreutils.
 #
 # Everything here is idempotent — the whole point is that running it after
 # every release is safe, so a release that needs no migration costs nothing.
@@ -14,24 +15,14 @@ cd "$(dirname "$0")"
 
 # ── .env keys this version of the bundle needs ───────────────────────────────
 #
-# Appended only when missing; an existing value is NEVER touched — two of these
-# seal data at rest, and regenerating one turns what it sealed into noise.
-rand_hex() { head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n'; }
-rand_b64url() { head -c "$1" /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\n'; }
-ensure() {
-  grep -q "^$1=" .env 2>/dev/null || { printf '%s=%s\n' "$1" "$2" >> .env; echo "update: added $1 to .env"; }
-}
-
-# The connector's bearer (default-on since 1.1.19 — an on-prem install exists
-# because there is a payroll machine to drive).
-ensure WORKER_TOKEN "$(rand_hex)"
-# The stored-credential keyring: seals the RDP password the office types into
-# settings. Installs from before it shipped have no key and cannot save.
-ensure SECRET_KEYS "v1:$(rand_b64url 32)"
-ensure SECRET_ACTIVE_KEY "v1"
-# Where this kit lives on the host — the operator mounts it at the same path,
-# which is what lets compose-in-a-container resolve ./Caddyfile and .env.
-ensure KIT_DIR "$(pwd)"
+# images.sh (migrate_env): missing keys appended, never an existing value
+# changed; the install token copied between BROKER_TOKEN and
+# METRICS_INSTALL_TOKEN when only one is set; MONGO_VERSION pinned to the
+# running database when missing.
+KIT_ENV="./.env"
+. ./images.sh
+migrate_env | sed 's/^/update: /'
+[ -n "$(kit_env BROKER_TOKEN)" ] || echo "update: no install token in .env (BROKER_TOKEN / METRICS_INSTALL_TOKEN) — AI features fail once Dekel requires it"
 
 # ── Images ───────────────────────────────────────────────────────────────────
 #
@@ -43,8 +34,6 @@ ensure KIT_DIR "$(pwd)"
 # A failed pull is not a failed update: the install applies the kit with the
 # images it has. adopt_legacy_images covers an install from before images.sh,
 # whose images exist only under their registry names.
-KIT_ENV="./.env"
-. ./images.sh
 channel="$(kit_channel)"
 if [ "${IMAGES_FETCHED:-}" != "1" ]; then
   if release_lookup "$channel"; then
@@ -55,7 +44,6 @@ if [ "${IMAGES_FETCHED:-}" != "1" ]; then
   fi
 fi
 adopt_legacy_images "$channel"
-pin_mongo_version
 
 # ── Apply the wiring ─────────────────────────────────────────────────────────
 #

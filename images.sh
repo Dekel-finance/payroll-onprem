@@ -177,7 +177,10 @@ fetch_image() {
   remote="$RELEASE_REGISTRY/$repo:$channel"
   target="$(local_image "$repo" "$channel")"
   docker pull -q "$remote" >/dev/null 2>&1 || { echo "pull of $repo:$channel failed" >&2; return 1; }
-  docker tag "$remote" "$target" || return 1
+  # One retry: two installs on one machine (the demo box runs `demo` and
+  # `internal`) share these local names, and when both cycles tag in the same
+  # second the second one fails with "already exists" (2026-10-20).
+  docker tag "$remote" "$target" 2>/dev/null || { sleep 2; docker tag "$remote" "$target"; } || return 1
   drop_remote_refs "$target"
   return 0
 }
@@ -233,5 +236,67 @@ pin_mongo_version() {
       echo "pinned MONGO_VERSION=${img#mongo:} in .env (the database that is running)"
       ;;
   esac
+  return 0
+}
+
+# ── .env keys this version of the bundle needs ───────────────────────────────
+#
+# One copy, run by update.sh (the operator's path and `./install.sh update`)
+# and by `./install.sh install`. Appended only when missing; an existing value
+# is NEVER touched — two of these seal data at rest, and regenerating one
+# turns what it sealed into noise. Call from the kit directory.
+rand_hex() { head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n'; }
+rand_b64url() { head -c "$1" /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\n'; }
+
+# Append KEY=VALUE when KEY is not in .env at all.
+kit_env_ensure() {
+  grep -q "^$1=" "$KIT_ENV" 2>/dev/null && return 0
+  [ -z "$(tail -c1 "$KIT_ENV" 2>/dev/null)" ] || echo >> "$KIT_ENV"
+  printf '%s=%s\n' "$1" "$2" >> "$KIT_ENV"
+  echo "added $1 to .env"
+}
+
+# Set KEY when it is missing or blank. Never overwrites a value that is there:
+# an install's credentials are not ours to replace on an update. Rewritten in
+# place (cat >), so the file keeps its owner and mode (install.sh makes it 600).
+kit_env_fill() {
+  [ -n "$2" ] || return 0
+  [ -z "$(kit_env "$1")" ] || return 0
+  if grep -q "^$1=" "$KIT_ENV" 2>/dev/null; then
+    sed "s|^$1=.*|$1=$2|" "$KIT_ENV" > "$KIT_ENV.tmp" && cat "$KIT_ENV.tmp" > "$KIT_ENV" && rm -f "$KIT_ENV.tmp"
+  else
+    [ -z "$(tail -c1 "$KIT_ENV" 2>/dev/null)" ] || echo >> "$KIT_ENV"
+    printf '%s=%s\n' "$1" "$2" >> "$KIT_ENV"
+  fi
+  echo "filled $1 in .env"
+}
+
+migrate_env() {
+  [ -f "${KIT_ENV:-}" ] || return 0
+  # The connector's bearer (default-on since 1.1.19).
+  kit_env_ensure WORKER_TOKEN "$(rand_hex)"
+  # The stored-credential keyring: seals the RDP password the office types into
+  # settings. Installs from before it shipped have no key and cannot save.
+  kit_env_ensure SECRET_KEYS "v1:$(rand_b64url 32)"
+  kit_env_ensure SECRET_ACTIVE_KEY "v1"
+  # Where this kit lives on the host — the operator mounts it at the same path,
+  # which is what lets compose-in-a-container resolve ./Caddyfile and .env.
+  kit_env_ensure KIT_DIR "$(pwd)"
+  pin_mongo_version
+
+  # The install credential. BROKER_TOKEN and METRICS_INSTALL_TOKEN are the SAME
+  # token (`dki_…`), the one we issue with the install. An install with only one
+  # of them comes up healthy, but without BROKER_TOKEN its AI calls and update
+  # checks carry no token (the demo box's `internal`, 2026-10-20). So the
+  # other is filled from whichever is set. Never generated: a random value would
+  # turn a refusal that names its cause into an authentication failure.
+  broker="$(kit_env BROKER_TOKEN)"
+  metrics="$(kit_env METRICS_INSTALL_TOKEN)"
+  [ -n "$broker" ] && kit_env_fill METRICS_INSTALL_TOKEN "$broker"
+  [ -n "$metrics" ] && kit_env_fill BROKER_TOKEN "$metrics"
+  if [ -n "${INSTALL_TOKEN:-}" ]; then
+    kit_env_fill BROKER_TOKEN "$INSTALL_TOKEN"
+    kit_env_fill METRICS_INSTALL_TOKEN "$INSTALL_TOKEN"
+  fi
   return 0
 }
