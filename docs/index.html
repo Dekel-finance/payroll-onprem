@@ -571,6 +571,31 @@ against our installation of the payroll software. A different version, screen
 resolution or company book may need recalibrating. <strong>This is the single
 largest unknown in an on-premise deployment</strong> and we would rather agree a
 date for it in advance than discover it during your month-end.</p></div>
+<h4 id="sessions-en">Installed on the payroll server itself: allow multiple RDP sessions</h4>
+<p>The connector signs in over RDP to the server's own IP address with the
+office's Windows account. Set up the server as follows (PowerShell as
+administrator). No restart is needed.</p>
+<ol>
+<li><strong>Allow several sessions per account.</strong>
+<div class="code"><button class="copy" type="button">Copy</button><pre>Set-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server' fSingleSessionPerUser 0</pre></div>
+If Group Policy manages this, set instead: <em>Computer Configuration →
+Administrative Templates → Windows Components → Remote Desktop Services → Remote
+Desktop Session Host → Connections → Restrict Remote Desktop Services users to a
+single Remote Desktop Services session</em> = <strong>Disabled</strong>.</li>
+<li><strong>Sign out disconnected sessions after 1 minute.</strong>
+<div class="code"><button class="copy" type="button">Copy</button><pre>$p = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'
+New-Item $p -Force | Out-Null
+Set-ItemProperty $p MaxDisconnectionTime 60000 -Type DWord</pre></div>
+Group Policy equivalent: <em>… → Remote Desktop Session Host → Session Time
+Limits → Set time limit for disconnected sessions</em> = <strong>1
+minute</strong>. Staff should sign out of RDP, not just close the window.</li>
+<li><strong>During a run, at most one other RDP connection to the server.</strong>
+Windows Server allows two remote sessions without RDS licences, and the
+connector uses one. Working at the physical console does not count.</li>
+</ol>
+<div class="code"><button class="copy" type="button">Copy</button><pre><span class="c"># check: first line prints 0; qwinsta lists the sessions</span>
+(Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server').fSingleSessionPerUser
+qwinsta</pre></div>
 </section><section class="sec" id="ops-en"><span class="sec-n">13</span><h2>Operations reference</h2>
 <div class="code"><button class="copy" type="button">Copy</button><pre>./install.sh status     <span class="c"># what is running, which version, and the addresses</span>
 ./install.sh logs       <span class="c"># follow everything; add a service name for one</span>
@@ -596,6 +621,7 @@ when you do it and we will delete what this installation reported.</p>
 <tr><td>The login page returns to itself, no error anywhere</td><td>You are on <code>http://</code>. See §6 — the browser is discarding a <code>Secure</code> cookie</td></tr>
 <tr><td>Browser warns the certificate is untrusted</td><td>The root has not been distributed yet. §6</td></tr>
 <tr><td>"Provision a connector" on a payroll action</td><td>No connector is registered for this bureau yet — tell us and we will point one at your payroll system.</td></tr>
+<tr><td>A payroll run fails with "the session is frozen" or <code>/screenshot → 503</code>, and the connector logs show "Manually logged off"</td><td>Windows ended the connector's session because the two-session limit was reached. Run <code>qwinsta</code> on the payroll server to see who is connected, disconnect one session, and run again. To prevent it, see §12, <a href="#sessions-en">Windows sessions</a></td></tr>
 
 <tr><td>A document is refused by the AI step</td><td>Attachments are blocked by default and OCR could not read the scan. Use a clearer scan, or change the setting knowingly. §8</td></tr>
 <tr><td>Reminders never send</td><td><code>./install.sh logs scheduler</code> — it answers 503 when a job has stopped succeeding</td></tr>
@@ -994,6 +1020,30 @@ WORKER_TOKEN=...</pre></div>
 השכר. גרסה אחרת, רזולוציה אחרת או ספר חברות אחר עשויים לדרוש כיול מחדש.
 <strong>זהו הנעלם הגדול ביותר בהטמעה מקומית</strong>, ואנחנו מעדיפים לקבוע לו
 תאריך מראש ולא לגלות אותו באמצע סגירת החודש שלכם.</p></div>
+<h4 id="sessions-he">התקנה על שרת השכר עצמו: אפשור כמה חיבורי RDP</h4>
+<p>המחבר מתחבר ב-RDP לכתובת ה-IP של השרת עצמו עם חשבון ה-Windows של המשרד. הגדירו
+את השרת כך (PowerShell כמנהל). לא צריך הפעלה מחדש.</p>
+<ol>
+<li><strong>לאפשר כמה סשנים לאותו חשבון.</strong>
+<div class="code"><button class="copy" type="button">העתק</button><pre>Set-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server' fSingleSessionPerUser 0</pre></div>
+אם זה מנוהל ב-Group Policy, הגדירו במקום זה: <em>Computer Configuration ←
+Administrative Templates ← Windows Components ← Remote Desktop Services ← Remote
+Desktop Session Host ← Connections ← Restrict Remote Desktop Services users to a
+single Remote Desktop Services session</em> = <strong>Disabled</strong>.</li>
+<li><strong>לנתק סשנים מנותקים אחרי דקה.</strong>
+<div class="code"><button class="copy" type="button">העתק</button><pre>$p = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'
+New-Item $p -Force | Out-Null
+Set-ItemProperty $p MaxDisconnectionTime 60000 -Type DWord</pre></div>
+המקבילה ב-Group Policy: <em>… ← Remote Desktop Session Host ← Session Time
+Limits ← Set time limit for disconnected sessions</em> = <strong>דקה
+אחת</strong>. על הצוות להתנתק (Sign out) מ-RDP ולא רק לסגור את החלון.</li>
+<li><strong>בזמן הרצה, לכל היותר חיבור RDP נוסף אחד לשרת.</strong> בלי רישיונות
+RDS, Windows Server מאפשר שני סשנים מרוחקים, והמחבר תופס אחד. עבודה בקונסולה
+הפיזית לא נספרת.</li>
+</ol>
+<div class="code"><button class="copy" type="button">העתק</button><pre><span class="c"># check: first line prints 0; qwinsta lists the sessions</span>
+(Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server').fSingleSessionPerUser
+qwinsta</pre></div>
 </section><section class="sec" id="ops-he"><span class="sec-n">13</span><h2>מדריך תפעול</h2>
 <div class="code"><button class="copy" type="button">העתק</button><pre>./install.sh status     <span class="c"># what is running, which version, and the addresses</span>
 ./install.sh logs       <span class="c"># follow everything; add a service name to narrow it</span>
@@ -1019,6 +1069,7 @@ WORKER_TOKEN=...</pre></div>
 <tr><td>דף ההתחברות חוזר לעצמו, בלי שגיאה בשום מקום</td><td>אתם על <code>http://</code>. ראו פרק 6 — הדפדפן משליך עוגיית <code>Secure</code></td></tr>
 <tr><td>הדפדפן מזהיר שהתעודה אינה מהימנה</td><td>אישור השורש עדיין לא הופץ. פרק 6</td></tr>
 <tr><td>״להקצות מחבר״ בפעולת שכר</td><td>עדיין לא הוקצה מחבר ללשכה הזו — פנו אלינו.</td></tr>
+<tr><td>הרצת שכר נכשלת עם ״הסשן מול המכונה קפוא״ או <code>/screenshot → 503</code>, וביומני המחבר מופיע "Manually logged off"</td><td>Windows סיים את הסשן של המחבר כי הגיע למגבלת שני הסשנים. הריצו <code>qwinsta</code> על שרת השכר כדי לראות מי מחובר, נתקו סשן אחד והריצו שוב. כדי למנוע את זה, ראו פרק 12, <a href="#sessions-he">סשנים של Windows</a></td></tr>
 <tr><td>דף לא נטען בשום כתובת</td><td><code>SITE_ADDRESS</code> לא תואם לשם שהוקלד. הריצו שוב <code>./install.sh bootstrap</code></td></tr>
 <tr><td>מסמך נדחה בשלב ה-AI</td><td>צירופי קבצים חסומים כברירת מחדל וה-OCR לא קרא את הסריקה. סריקה ברורה יותר, או שינוי מודע של ההגדרה. פרק 8</td></tr>
 <tr><td>תזכורות לא נשלחות</td><td><code>./install.sh logs scheduler</code> — הוא מחזיר 503 כשמשימה הפסיקה להצליח</td></tr>
