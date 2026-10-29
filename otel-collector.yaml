@@ -1,0 +1,74 @@
+# The otel-collector's config: host and container metrics to Better Stack.
+# Mounted read-only by docker-compose.yml. `${env:…}` comes from the
+# container's environment, set in docker-compose.yml from .env.
+#
+# Only metrics: no logs or traces receiver, so no payroll data enters it.
+# transform/allowlist drops every attribute not named there.
+# otel-collector-check.sh lists what would be sent.
+receivers:
+  host_metrics:
+    collection_interval: 60s
+    root_path: /hostfs
+    scrapers:
+      cpu:
+        metrics:
+          system.cpu.utilization: {enabled: true}
+      memory:
+        metrics:
+          system.memory.utilization: {enabled: true}
+      load: {}
+      system: {}
+      filesystem:
+        include_mount_points:
+          match_type: strict
+          mount_points: ["/", "/var/lib/docker", "/var/snap/docker/common"]
+        metrics:
+          system.filesystem.utilization: {enabled: true}
+  docker_stats:
+    endpoint: tcp://docker-logs:2375
+    collection_interval: 60s
+    api_version: "${env:DOCKER_API_VERSION:-1.41}"
+    metrics:
+      container.restarts: {enabled: true}
+      container.uptime: {enabled: true}
+processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 200
+  # No Better Stack token: drop everything, so nothing is sent.
+  filter/off:
+    error_mode: ignore
+    metrics:
+      metric:
+        - '"${env:OTEL_SEND}" != "yes"'
+  resource:
+    attributes:
+      - {key: service.name, value: payroll-onprem, action: upsert}
+      - {key: host.name, value: "${env:OTEL_HOST_NAME:-unknown}", action: upsert}
+      - {key: install.id, value: "${env:OTEL_INSTALL_ID:-unknown}", action: upsert}
+      - {key: deployment.environment, value: "${env:OTEL_ENVIRONMENT:-production}", action: upsert}
+  # The allowlist. Any attribute not named here is dropped before export.
+  transform/allowlist:
+    error_mode: ignore
+    metric_statements:
+      - context: resource
+        statements:
+          - keep_keys(attributes, ["service.name", "host.name", "install.id", "deployment.environment", "container.name", "container.image.name"])
+      - context: datapoint
+        statements:
+          - keep_keys(attributes, ["cpu", "state", "device", "mountpoint", "type", "direction", "interface"])
+  batch: {}
+exporters:
+  otlphttp/betterstack:
+    endpoint: "https://${env:BETTERSTACK_INGEST_HOST}"
+    headers:
+      Authorization: "Bearer ${env:BETTERSTACK_SOURCE_TOKEN}"
+service:
+  telemetry:
+    metrics:
+      level: none
+  pipelines:
+    metrics:
+      receivers: [host_metrics, docker_stats]
+      processors: [memory_limiter, filter/off, resource, transform/allowlist, batch]
+      exporters: [otlphttp/betterstack]

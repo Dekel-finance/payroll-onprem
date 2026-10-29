@@ -102,6 +102,16 @@ if [ -f "$caddyfile" ] && docker compose -f docker-compose.yml ps --status runni
   fi
 fi
 
+# ── The otel-collector picks up a changed otel-collector.yaml ────────────────
+#
+# Same as the Caddyfile: a bind-mounted file read once at start, and `up` does
+# not see it change. The collector keeps no state, so recreate it every time.
+# A failure here only stops metrics to Better Stack.
+if [ -f ./otel-collector.yaml ] && docker compose -f docker-compose.yml config --services 2>/dev/null | grep -qx otel-collector; then
+  docker compose -f docker-compose.yml up -d --force-recreate --no-deps otel-collector >/dev/null 2>&1 \
+    || echo "update: otel-collector recreate failed — metrics to Better Stack stop until the next update"
+fi
+
 # The containers now run the local names: drop the registry-named copies and
 # images nothing uses any more.
 remove_legacy_images

@@ -622,7 +622,7 @@ services:
     networks: [support]
 
   # Host and container metrics to Better Stack, for monitoring and alerts.
-  # Standard OpenTelemetry Collector, config in `configs.otel-collector` below.
+  # Standard OpenTelemetry Collector, config in otel-collector.yaml (the kit).
   #
   # Metrics only: no logs or traces receiver, so payroll data never enters it.
   # A `keep_keys` allowlist drops every attribute not named there.
@@ -637,8 +637,7 @@ services:
     image: otel/opentelemetry-collector-contrib:0.162.0
     logging: *logging
     restart: unless-stopped
-    # Not read_only: compose writes the inline config into the container and
-    # refuses that on a read-only service.
+    read_only: true
     cap_drop: [ALL]
     mem_limit: 256m
     environment:
@@ -649,10 +648,9 @@ services:
       OTEL_INSTALL_ID: ${METRICS_INSTALL_ID:-unknown}
       OTEL_ENVIRONMENT: ${METRICS_ENVIRONMENT:-production}
       DOCKER_API_VERSION: ${DOCKER_API_VERSION:-1.41}
-    configs:
-      - source: otel-collector
-        target: /etc/otelcol-contrib/config.yaml
     volumes:
+      # A plain file, not an inline compose config: works on any Compose version.
+      - ./otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
       - /:/hostfs:ro
     # `egress` to reach Better Stack, `support` to reach docker-logs.
     networks: [egress, support]
@@ -672,78 +670,6 @@ networks:
   # on the office LAN from here. Containers on `internal` alone cannot.
   lan:
 
-configs:
-  # The otel-collector's config. `$$` is a literal `$` for compose; the
-  # collector expands `${env:…}` from its own environment.
-  otel-collector:
-    content: |
-      receivers:
-        host_metrics:
-          collection_interval: 60s
-          root_path: /hostfs
-          scrapers:
-            cpu:
-              metrics:
-                system.cpu.utilization: {enabled: true}
-            memory:
-              metrics:
-                system.memory.utilization: {enabled: true}
-            load: {}
-            system: {}
-            filesystem:
-              include_mount_points:
-                match_type: strict
-                mount_points: ["/", "/var/lib/docker", "/var/snap/docker/common"]
-              metrics:
-                system.filesystem.utilization: {enabled: true}
-        docker_stats:
-          endpoint: tcp://docker-logs:2375
-          collection_interval: 60s
-          api_version: "$${env:DOCKER_API_VERSION:-1.41}"
-          metrics:
-            container.restarts: {enabled: true}
-            container.uptime: {enabled: true}
-      processors:
-        memory_limiter:
-          check_interval: 5s
-          limit_mib: 200
-        # No Better Stack token: drop everything, so nothing is sent.
-        filter/off:
-          error_mode: ignore
-          metrics:
-            metric:
-              - '"$${env:OTEL_SEND}" != "yes"'
-        resource:
-          attributes:
-            - {key: service.name, value: payroll-onprem, action: upsert}
-            - {key: host.name, value: "$${env:OTEL_HOST_NAME:-unknown}", action: upsert}
-            - {key: install.id, value: "$${env:OTEL_INSTALL_ID:-unknown}", action: upsert}
-            - {key: deployment.environment, value: "$${env:OTEL_ENVIRONMENT:-production}", action: upsert}
-        # The allowlist. Any attribute not named here is dropped before export.
-        transform/allowlist:
-          error_mode: ignore
-          metric_statements:
-            - context: resource
-              statements:
-                - keep_keys(attributes, ["service.name", "host.name", "install.id", "deployment.environment", "container.name", "container.image.name"])
-            - context: datapoint
-              statements:
-                - keep_keys(attributes, ["cpu", "state", "device", "mountpoint", "type", "direction", "interface"])
-        batch: {}
-      exporters:
-        otlphttp/betterstack:
-          endpoint: "https://$${env:BETTERSTACK_INGEST_HOST}"
-          headers:
-            Authorization: "Bearer $${env:BETTERSTACK_SOURCE_TOKEN}"
-      service:
-        telemetry:
-          metrics:
-            level: none
-        pipelines:
-          metrics:
-            receivers: [host_metrics, docker_stats]
-            processors: [memory_limiter, filter/off, resource, transform/allowlist, batch]
-            exporters: [otlphttp/betterstack]
 
 volumes:
   caddy-data:
