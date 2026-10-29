@@ -231,6 +231,11 @@ services:
       BETTERSTACK_INGEST_HOST: ${BETTERSTACK_INGEST_HOST:-}
       BETTERSTACK_SOURCE_TOKEN: ${BETTERSTACK_SOURCE_TOKEN:-}
       BETTERSTACK_HEARTBEAT_URL: ${BETTERSTACK_HEARTBEAT_URL:-}
+      # Without a token of its own the install still reports: traces and
+      # events (incidents among them) go out through the gateway to the broker,
+      # which holds the one Better Stack token.
+      TELEMETRY_RELAY_URL: ${TELEMETRY_RELAY_URL:-http://gateway:8090}
+      TELEMETRY_RELAY_TOKEN: ${GATEWAY_TOKEN:-}
     networks: [internal, egress]
     depends_on:
       mongo: {condition: service_healthy}
@@ -452,6 +457,10 @@ services:
       # doc comment on `archivePathStep` in payslip-archive.ts. Unconfirmed
       # on a live screen; override here if the typed path is rejected.
       MICHPAL_ARCHIVE_BASE_PATH: ${MICHPAL_ARCHIVE_BASE_PATH:-}
+      # How the payroll computer's screen-reading helper reaches this connector
+      # when its own port (9010) is closed: it calls OUT to the console address,
+      # where Caddy routes /ui-map/agent/* here. No firewall rule on Windows.
+      UI_MAP_AGENT_URL: ${UI_MAP_AGENT_URL:-https://${SITE_ADDRESS:-localhost}:${CONSOLE_PORT:-443}}
     volumes:
       - michpal-artifacts:/var/lib/michpal/artifacts
       - michpal-drive:/drive
@@ -590,8 +599,8 @@ services:
   # "הורדת חבילת תמיכה" in the console. Our own code
   # (apps/gateway/src/docker-logs-proxy.ts): it forwards GET for container
   # list, inspect and logs, version and info — nothing else. No exec, no
-  # start/stop, no /archive (file copy). Only the gateway is on `support`;
-  # keep every other service off it.
+  # start/stop, no /archive (file copy). Only the gateway and
+  # otel-collector are on `support`; keep every other service off it.
   #
   # Same image, but NOT the &image anchor: no env_file, so the one process
   # holding the Docker socket has none of this install's secrets. Root only to
@@ -612,19 +621,129 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks: [support]
 
+  # Host and container metrics to Better Stack, for monitoring and alerts.
+  # Standard OpenTelemetry Collector, config in `configs.otel-collector` below.
+  #
+  # Metrics only: no logs or traces receiver, so payroll data never enters it.
+  # A `keep_keys` allowlist drops every attribute not named there.
+  #
+  # No Docker socket. Container stats come through docker-logs (read-only GET
+  # proxy) on `support`. The host root is mounted read-only for the disk
+  # metric; CPU, memory, load and uptime come from /proc, which shows the host.
+  #
+  # Without BETTERSTACK_SOURCE_TOKEN in .env it drops every metric and sends
+  # nothing (`filter/off`).
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.162.0
+    logging: *logging
+    restart: unless-stopped
+    # Not read_only: compose writes the inline config into the container and
+    # refuses that on a read-only service.
+    cap_drop: [ALL]
+    mem_limit: 256m
+    environment:
+      OTEL_SEND: ${BETTERSTACK_SOURCE_TOKEN:+yes}
+      BETTERSTACK_INGEST_HOST: ${BETTERSTACK_INGEST_HOST:-unset.invalid}
+      BETTERSTACK_SOURCE_TOKEN: ${BETTERSTACK_SOURCE_TOKEN:-}
+      OTEL_HOST_NAME: ${METRICS_SITE_ADDRESS:-${SITE_ADDRESS:-unknown}}
+      OTEL_INSTALL_ID: ${METRICS_INSTALL_ID:-unknown}
+      OTEL_ENVIRONMENT: ${METRICS_ENVIRONMENT:-production}
+      DOCKER_API_VERSION: ${DOCKER_API_VERSION:-1.41}
+    configs:
+      - source: otel-collector
+        target: /etc/otelcol-contrib/config.yaml
+    volumes:
+      - /:/hostfs:ro
+    # `egress` to reach Better Stack, `support` to reach docker-logs.
+    networks: [egress, support]
+    depends_on: [docker-logs]
+
 networks:
   # No gateway route is installed on this network. A container attached only to
   # it cannot reach the internet even if its code tries to — which is what makes
   # the gateway the only door rather than the recommended one.
   internal:
     internal: true
-  # The gateway and docker-logs only. No route out.
+  # The gateway, otel-collector and docker-logs only. No route out.
   support:
     internal: true
   egress:
   # Routable bridge for the michpal profile only: guacd dials the Windows box
   # on the office LAN from here. Containers on `internal` alone cannot.
   lan:
+
+configs:
+  # The otel-collector's config. `$$` is a literal `$` for compose; the
+  # collector expands `${env:…}` from its own environment.
+  otel-collector:
+    content: |
+      receivers:
+        host_metrics:
+          collection_interval: 60s
+          root_path: /hostfs
+          scrapers:
+            cpu:
+              metrics:
+                system.cpu.utilization: {enabled: true}
+            memory:
+              metrics:
+                system.memory.utilization: {enabled: true}
+            load: {}
+            system: {}
+            filesystem:
+              include_mount_points:
+                match_type: strict
+                mount_points: ["/", "/var/lib/docker", "/var/snap/docker/common"]
+              metrics:
+                system.filesystem.utilization: {enabled: true}
+        docker_stats:
+          endpoint: tcp://docker-logs:2375
+          collection_interval: 60s
+          api_version: "$${env:DOCKER_API_VERSION:-1.41}"
+          metrics:
+            container.restarts: {enabled: true}
+            container.uptime: {enabled: true}
+      processors:
+        memory_limiter:
+          check_interval: 5s
+          limit_mib: 200
+        # No Better Stack token: drop everything, so nothing is sent.
+        filter/off:
+          error_mode: ignore
+          metrics:
+            metric:
+              - '"$${env:OTEL_SEND}" != "yes"'
+        resource:
+          attributes:
+            - {key: service.name, value: payroll-onprem, action: upsert}
+            - {key: host.name, value: "$${env:OTEL_HOST_NAME:-unknown}", action: upsert}
+            - {key: install.id, value: "$${env:OTEL_INSTALL_ID:-unknown}", action: upsert}
+            - {key: deployment.environment, value: "$${env:OTEL_ENVIRONMENT:-production}", action: upsert}
+        # The allowlist. Any attribute not named here is dropped before export.
+        transform/allowlist:
+          error_mode: ignore
+          metric_statements:
+            - context: resource
+              statements:
+                - keep_keys(attributes, ["service.name", "host.name", "install.id", "deployment.environment", "container.name", "container.image.name"])
+            - context: datapoint
+              statements:
+                - keep_keys(attributes, ["cpu", "state", "device", "mountpoint", "type", "direction", "interface"])
+        batch: {}
+      exporters:
+        otlphttp/betterstack:
+          endpoint: "https://$${env:BETTERSTACK_INGEST_HOST}"
+          headers:
+            Authorization: "Bearer $${env:BETTERSTACK_SOURCE_TOKEN}"
+      service:
+        telemetry:
+          metrics:
+            level: none
+        pipelines:
+          metrics:
+            receivers: [host_metrics, docker_stats]
+            processors: [memory_limiter, filter/off, resource, transform/allowlist, batch]
+            exporters: [otlphttp/betterstack]
 
 volumes:
   caddy-data:

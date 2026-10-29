@@ -55,7 +55,7 @@ adopt_legacy_images "$channel"
 # next host-run ./install.sh update, whose compose is not sawing its own
 # branch.
 #
-# Never a busy agent or connector either: restarting one mid-run loses the
+# Never a busy agent, connector or console either: restarting one mid-run loses the
 # run (images.sh, apply_services). It stays on its old image and the next
 # operator cycle, which sees it stale, runs this again.
 #
@@ -80,6 +80,27 @@ docker compose -f docker-compose.yml up -d --remove-orphans $SERVICES || {
   # shellcheck disable=SC2086
   docker compose -f docker-compose.yml up -d --remove-orphans $SERVICES
 }
+
+# ── Caddy picks up a changed Caddyfile ───────────────────────────────────────
+#
+# The Caddyfile is a bind-mounted file and Caddy reads it once, at start. The
+# kit sync rewrites it on disk, but `up` sees an unchanged service and leaves
+# the old routes running — every install updated past 1.3.42 kept answering
+# 404 on /ui-map/agent/*, so agent mode never connected (Profitian,
+# 2026-10-26). A reload with the same config is a no-op inside Caddy, so this
+# runs every time. When the container still holds the file's old inode (it was
+# replaced, not rewritten) the reload would read stale content: recreate it.
+caddyfile="./$(kit_env CADDYFILE)"
+[ "$caddyfile" != "./" ] || caddyfile="./Caddyfile.lan"
+if [ -f "$caddyfile" ] && docker compose -f docker-compose.yml ps --status running -q caddy 2>/dev/null | grep -q .; then
+  seen="$(docker compose -f docker-compose.yml exec -T caddy cat /etc/caddy/Caddyfile 2>/dev/null | cksum)"
+  if [ "$seen" != "$(cksum < "$caddyfile")" ]; then
+    echo "update: caddy sees an old Caddyfile — recreating it"
+    docker compose -f docker-compose.yml up -d --force-recreate --no-deps caddy || echo "update: caddy recreate failed"
+  elif ! docker compose -f docker-compose.yml exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1; then
+    echo "update: caddy reload failed — keeping the running routes"
+  fi
+fi
 
 # The containers now run the local names: drop the registry-named copies and
 # images nothing uses any more.

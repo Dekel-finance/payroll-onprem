@@ -131,15 +131,18 @@ stale_services() {
       done | sort -u || true
 }
 
-# The agent and the connector report a run in flight on /health
-# ({busy: true}); restarting either then loses the run (the agent's reply,
-# the connector's payroll session). Same check as the cloud worker's guard.
-# Run inside the container, so no port is opened for it. A service that is
-# not running or does not answer is not busy.
-BUSY_PROBE="fetch('http://127.0.0.1:8080/health').then(r=>r.json()).then(j=>{if(j.busy)console.log('busy: '+(j.activeJob||''))}).catch(()=>{})"
+# The agent, the connector and the console report a run in flight on their
+# health route ({busy: true}); restarting one then loses the run (the agent's
+# reply, the connector's payroll session, the console's import walk). Same
+# check as the cloud worker's guard. Run inside the container, so no port is
+# opened for it. A service that is not running or does not answer is not busy.
+busy_probe() {
+  printf "fetch('%s').then(r=>r.json()).then(j=>{if(j.busy)console.log('busy: '+(j.activeJob||''))}).catch(()=>{})" "$1"
+}
 busy_services() {
-  for svc in agent michpal-worker; do
-    out="$(docker compose -f docker-compose.yml exec -T "$svc" node -e "$BUSY_PROBE" 2>/dev/null || true)"
+  for pair in agent=http://127.0.0.1:8080/health michpal-worker=http://127.0.0.1:8080/health console=http://127.0.0.1:3201/api/health; do
+    svc="${pair%%=*}"
+    out="$(docker compose -f docker-compose.yml exec -T "$svc" node -e "$(busy_probe "${pair#*=}")" 2>/dev/null || true)"
     case "$out" in busy*) printf '%s\n' "$svc" ;; esac
   done
 }

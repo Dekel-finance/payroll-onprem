@@ -22,6 +22,11 @@
 # address, so the block is simply absent.
 
 https://{$SITE_ADDRESS}:{$CONSOLE_PORT} {
+	# The payroll computer's screen-reading helper calls out to the connector
+	# here (agent mode). Token-checked by the connector itself.
+	handle /ui-map/agent/* {
+		reverse_proxy michpal-worker:8080
+	}
 	reverse_proxy console:3201 {
 	# Hold the request instead of failing it while a container is being replaced.
 	#
