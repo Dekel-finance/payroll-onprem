@@ -43,7 +43,8 @@ processors:
         - '"${env:OTEL_SEND}" != "yes"'
   resource:
     attributes:
-      - {key: service.name, value: payroll-onprem, action: upsert}
+      # The install id, so Better Stack's Service names the box, like the snapshot rows.
+      - {key: service.name, value: "${env:OTEL_INSTALL_ID:-unknown}", action: upsert}
       - {key: host.name, value: "${env:OTEL_HOST_NAME:-unknown}", action: upsert}
       - {key: install.id, value: "${env:OTEL_INSTALL_ID:-unknown}", action: upsert}
       - {key: deployment.environment, value: "${env:OTEL_ENVIRONMENT:-production}", action: upsert}
