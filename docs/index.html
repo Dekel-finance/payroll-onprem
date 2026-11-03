@@ -226,7 +226,7 @@ docker compose exec console node -e "fetch('https://example.com').catch(e=>{cons
 <tr><td>CPU</td><td class="num">4 cores, <strong>with AVX</strong></td><td class="num">8 cores</td></tr>
 <tr><td>Memory</td><td class="num">8 GB</td><td class="num">16 GB</td></tr>
 <tr><td>Disk</td><td class="num">40 GB free</td><td class="num">100 GB SSD</td></tr>
-<tr><td>OS</td><td>Ubuntu 22.04+ or Windows (WSL2 + Docker Desktop); Docker Engine 24+, Compose v2.20+</td><td>Ubuntu 24.04 LTS / Windows Server 2022</td></tr>
+<tr><td>OS</td><td>Ubuntu 22.04+ or Windows 10/11 or Server (WSL2 + Docker Engine — <a href="#windows-en">see §4</a>); Docker Engine 24+, Compose v2.20+</td><td>Ubuntu 24.04 LTS / Windows Server 2022</td></tr>
 </tbody></table></div>
 <div class="warn"><p class="co-h">AVX is a hard requirement, not a performance note</p>
 <p>MongoDB 5.0 and later are compiled with AVX instructions. A CPU without them
@@ -269,6 +269,33 @@ stays closed.</p>
 <li>Where the key file will be backed up to (§5). Decide this <em>before</em> installing.</li>
 </ul>
 </section><section class="sec" id="install-en"><span class="sec-n">04</span><h2>Installation</h2>
+<h4 id="windows-en">On Windows — do this first</h4>
+<p>The platform runs in Linux containers. On Windows they run inside <strong>WSL</strong>,
+the Linux that ships with Windows. Every command in this guide is a Linux command:
+<strong>it does not work typed into PowerShell</strong>. Type it in the WSL window instead.</p>
+<p><strong>1.</strong> Open PowerShell with <em>Run as administrator</em> and install WSL. Restart Windows if it asks.</p>
+<div class="code"><button class="copy" type="button">Copy</button><pre>wsl --install -d Ubuntu-24.04</pre></div>
+<p><strong>2.</strong> In PowerShell type <code>wsl</code>. A Linux window opens (it asks for a new username and password the first time). Install Docker Engine in it:</p>
+<div class="code"><button class="copy" type="button">Copy</button><pre>sudo -i
+curl -fsSL https://get.docker.com | sh
+printf '[boot]\nsystemd=true\n' &gt;&gt; /etc/wsl.conf
+exit
+exit</pre></div>
+<p><strong>3.</strong> Back in PowerShell, restart WSL and open it again:</p>
+<div class="code"><button class="copy" type="button">Copy</button><pre>wsl --shutdown
+wsl</pre></div>
+<p><strong>4.</strong> Continue with Step 1 below <strong>in this WSL window</strong>, as root (<code>sudo -i</code>, then <code>cd /opt</code>).
+Clone inside WSL, not onto <code>C:</code>: files checked out by Windows get Windows line endings and the scripts fail with <code>$'\r': command not found</code>.
+If the kit is already downloaded on <code>C:</code>, copy it in and fix the endings:</p>
+<div class="code"><button class="copy" type="button">Copy</button><pre>cp -r /mnt/c/Users/&lt;you&gt;/payroll-onprem /opt/payroll-onprem
+cd /opt/payroll-onprem
+sed -i 's/\r$//' *.sh *.mjs *.yml *.yaml Caddyfile.*</pre></div>
+<div class="note"><p class="co-h">Docker Engine, not Docker Desktop</p>
+<p>Docker Desktop is not supported on Windows Server and needs a paid licence above 250 staff.
+Docker Engine inside WSL needs neither. If Docker Desktop is already installed and <code>docker info</code> works in the WSL window, skip step 2.</p></div>
+<div class="note"><p class="co-h">Two Windows settings</p>
+<p><strong>Memory:</strong> WSL takes half the PC's RAM by default. Raise it in <code>C:\Users\&lt;you&gt;\.wslconfig</code>: a line <code>[wsl2]</code>, then <code>memory=12GB</code>.
+<strong>Other office PCs:</strong> on Windows 11 add <code>networkingMode=mirrored</code> under <code>[wsl2]</code> and allow TCP 443 in the Windows firewall, so staff reach the install on this PC's name. Run <code>wsl --shutdown</code> after changing the file.</p></div>
 <h4>Step 1 — inspect the machine</h4>
 <p>This writes nothing. It reports what is missing and stops.</p>
 <div class="code"><button class="copy" type="button">Copy</button><pre>git clone https://github.com/Dekel-finance/payroll-onprem.git
@@ -733,7 +760,7 @@ docker compose exec console node -e "fetch('https://example.com').catch(e=>{cons
 <tr><td>מעבד</td><td class="num">4 ליבות, <strong>עם AVX</strong></td><td class="num">8 ליבות</td></tr>
 <tr><td>זיכרון</td><td class="num">8 ג׳יגה</td><td class="num">16 ג׳יגה</td></tr>
 <tr><td>דיסק</td><td class="num">40 ג׳יגה פנויים</td><td class="num">100 ג׳יגה SSD</td></tr>
-<tr><td>מערכת הפעלה</td><td>Ubuntu 22.04+ או Windows (WSL2 + Docker Desktop); Docker Engine 24+, Compose v2.20+</td><td>Ubuntu 24.04 LTS / Windows Server 2022</td></tr>
+<tr><td>מערכת הפעלה</td><td>Ubuntu 22.04+ או Windows 10/11 או Server (WSL2 + Docker Engine — <a href="#windows-he">ראו פרק 4</a>); Docker Engine 24+, Compose v2.20+</td><td>Ubuntu 24.04 LTS / Windows Server 2022</td></tr>
 </tbody></table></div>
 <div class="warn"><p class="co-h">‏AVX היא דרישת חובה, לא הערת ביצועים</p>
 <p>‏MongoDB 5.0 ומעלה מהודרים עם הוראות AVX. מעבד שאין בו אותן אינו מריץ את מסד
@@ -773,6 +800,32 @@ system does not appear to have that!</code>, שורה שקל לפספס בתוך
 <li>לאן מגובה קובץ המפתחות (פרק 5). החליטו על כך <em>לפני</em> ההתקנה.</li>
 </ul>
 </section><section class="sec" id="install-he"><span class="sec-n">04</span><h2>התקנה</h2>
+<h4 id="windows-he">ב-Windows — קודם כול</h4>
+<p>המערכת רצה בקונטיינרים של Linux. ב-Windows הם רצים בתוך <strong>WSL</strong>, ה-Linux שמגיע עם Windows.
+כל הפקודות במדריך הזה הן פקודות Linux: <strong>הן לא עובדות כשמקלידים אותן ב-PowerShell</strong>. מקלידים אותן בחלון של WSL.</p>
+<p><strong>1.</strong> פתחו PowerShell ב-<em>Run as administrator</em> והתקינו את WSL. אם מתבקשת הפעלה מחדש של Windows — הפעילו מחדש.</p>
+<div class="code"><button class="copy" type="button">העתק</button><pre>wsl --install -d Ubuntu-24.04</pre></div>
+<p><strong>2.</strong> ב-PowerShell הקלידו <code>wsl</code>. נפתח חלון Linux (בפעם הראשונה הוא מבקש שם משתמש וסיסמה חדשים). התקינו בו את Docker Engine:</p>
+<div class="code"><button class="copy" type="button">העתק</button><pre>sudo -i
+curl -fsSL https://get.docker.com | sh
+printf '[boot]\nsystemd=true\n' &gt;&gt; /etc/wsl.conf
+exit
+exit</pre></div>
+<p><strong>3.</strong> חזרה ב-PowerShell — הפעילו מחדש את WSL ופתחו אותו שוב:</p>
+<div class="code"><button class="copy" type="button">העתק</button><pre>wsl --shutdown
+wsl</pre></div>
+<p><strong>4.</strong> המשיכו לשלב 1 למטה <strong>בחלון ה-WSL הזה</strong>, כ-root (<code>sudo -i</code> ואז <code>cd /opt</code>).
+הורידו את הערכה בתוך WSL ולא לכונן <code>C:</code>: קבצים ש-Windows מוריד מקבלים סופי שורה של Windows, והסקריפטים נכשלים עם <code>$'\r': command not found</code>.
+אם הערכה כבר הורדה ל-<code>C:</code>, העתיקו אותה פנימה ותקנו את סופי השורה:</p>
+<div class="code"><button class="copy" type="button">העתק</button><pre>cp -r /mnt/c/Users/&lt;you&gt;/payroll-onprem /opt/payroll-onprem
+cd /opt/payroll-onprem
+sed -i 's/\r$//' *.sh *.mjs *.yml *.yaml Caddyfile.*</pre></div>
+<div class="note"><p class="co-h">Docker Engine, לא Docker Desktop</p>
+<p>Docker Desktop אינו נתמך ב-Windows Server ודורש רישיון בתשלום מעל 250 עובדים. Docker Engine בתוך WSL לא דורש אף אחד מהם.
+אם Docker Desktop כבר מותקן ו-<code>docker info</code> עובד בחלון ה-WSL — דלגו על שלב 2.</p></div>
+<div class="note"><p class="co-h">שתי הגדרות של Windows</p>
+<p><strong>זיכרון:</strong> כברירת מחדל WSL מקבל חצי מה-RAM של המחשב. הגדילו ב-<code>C:\Users\&lt;you&gt;\.wslconfig</code>: שורה <code>[wsl2]</code> ואחריה <code>memory=12GB</code>.
+<strong>מחשבים אחרים במשרד:</strong> ב-Windows 11 הוסיפו <code>networkingMode=mirrored</code> תחת <code>[wsl2]</code> ואפשרו TCP 443 בחומת האש של Windows, כדי שהצוות יגיע להתקנה בשם המחשב הזה. אחרי שינוי הקובץ הריצו <code>wsl --shutdown</code>.</p></div>
 <h4>שלב 1 — בדיקת המכונה</h4>
 <p>הפקודה אינה כותבת דבר. היא מדווחת מה חסר ועוצרת.</p>
 <div class="code"><button class="copy" type="button">העתק</button><pre>git clone https://github.com/Dekel-finance/payroll-onprem.git
