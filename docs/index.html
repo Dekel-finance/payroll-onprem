@@ -623,6 +623,26 @@ connector uses one. Working at the physical console does not count.</li>
 <div class="code"><button class="copy" type="button">Copy</button><pre><span class="c"># check: first line prints 0; qwinsta lists the sessions</span>
 (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server').fSingleSessionPerUser
 qwinsta</pre></div>
+<h4 id="screen-reader-en">Windows settings the screen reader needs</h4>
+<p>The connector reads the payroll program's windows through a small helper that it
+starts in its own RDP session. Only port 3389 is needed: the helper talks to the
+connector inside the RDP connection (a virtual channel named <code>DEKELUI</code>). It needs
+no administrator rights. The settings below can stop it. After each software check the
+console shows every one of them under <em>Settings → System → Connection status</em>, with the
+same text.</p>
+<div class="tw"><table>
+<thead><tr><th>Setting</th><th>What breaks when it is blocked</th><th>How to allow it</th></tr></thead><tbody>
+<tr><td>RDP virtual channel <code>DEKELUI</code></td><td>The helper cannot answer inside the RDP connection. It falls back to a slower route, or does not start.</td><td>The RD Gateway and the security software on the server must not block static virtual channels on the connection.</td></tr>
+<tr><td>Run dialog (Win+R) and PowerShell</td><td>The connector cannot start the helper. <strong>Runs that write payroll stop before writing.</strong></td><td>Do not apply <em>User Configuration → Administrative Templates → Start Menu and Taskbar → Remove Run menu from Start Menu</em> to the Dekel account. Allow <code>powershell.exe</code> for it.</td></tr>
+<tr><td>Clipboard redirection</td><td>The read-backs that confirm what was written fail. <strong>Runs stop.</strong></td><td><em>Computer Configuration → Administrative Templates → Windows Components → Remote Desktop Services → Remote Desktop Session Host → Device and Resource Redirection → Do not allow Clipboard redirection</em> = Not configured or Disabled.</td></tr>
+<tr><td>PowerShell language mode</td><td>In Constrained Language mode the helper cannot read the program's windows. <strong>Runs that write payroll stop.</strong></td><td>Exclude the Dekel account from the AppLocker / WDAC policy, or allow the scripts in <code>C:\ui-map</code>.</td></tr>
+<tr><td>Script execution policy (Group Policy)</td><td><code>Restricted</code> or <code>AllSigned</code> stops the helper's script. <strong>Runs that write payroll stop.</strong></td><td><em>Computer (or User) Configuration → Administrative Templates → Windows Components → Windows PowerShell → Turn on Script Execution</em> = Not configured, or RemoteSigned.</td></tr>
+<tr><td>Drive redirection (<code>\\tsclient\DEKEL</code>)</td><td>Payslip and report exports fail, and the helper is not installed.</td><td><em>Computer Configuration → Administrative Templates → Windows Components → Remote Desktop Services → Remote Desktop Session Host → Device and Resource Redirection → Do not allow drive redirection</em> = Not configured or Disabled.</td></tr>
+</tbody></table></div>
+<div class="code"><button class="copy" type="button">Copy</button><pre><span class="c"># in the Dekel account's RDP session — expected: FullLanguage; no Restricted/AllSigned under MachinePolicy or UserPolicy; True</span>
+$ExecutionContext.SessionState.LanguageMode
+Get-ExecutionPolicy -List
+Test-Path \\tsclient\DEKEL</pre></div>
 </section><section class="sec" id="ops-en"><span class="sec-n">13</span><h2>Operations reference</h2>
 <div class="code"><button class="copy" type="button">Copy</button><pre>./install.sh status     <span class="c"># what is running, which version, and the addresses</span>
 ./install.sh logs       <span class="c"># follow everything; add a service name for one</span>
@@ -1097,6 +1117,24 @@ RDS, Windows Server מאפשר שני סשנים מרוחקים, והמחבר ת
 <div class="code"><button class="copy" type="button">העתק</button><pre><span class="c"># check: first line prints 0; qwinsta lists the sessions</span>
 (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server').fSingleSessionPerUser
 qwinsta</pre></div>
+<h4 id="screen-reader-he">הגדרות Windows שכלי קריאת המסך צריך</h4>
+<p>המחבר קורא את חלונות תוכנת השכר דרך כלי קטן שהוא מפעיל בחיבור ה-RDP שלו. נדרש רק
+פורט 3389: הכלי מדבר עם המחבר בתוך חיבור ה-RDP (ערוץ וירטואלי בשם <code>DEKELUI</code>).
+הוא לא צריך הרשאות מנהל. ההגדרות שלמטה יכולות לעצור אותו. אחרי כל בדיקת תוכנה הקונסולה
+מציגה כל אחת מהן ב<em>הגדרות ← מצב המערכת ← מצב החיבור</em>, באותו נוסח.</p>
+<div class="tw"><table>
+<thead><tr><th>הגדרה</th><th>מה נשבר כשהיא חסומה</th><th>איך מאפשרים</th></tr></thead><tbody>
+<tr><td>ערוץ ה-RDP <code>DEKELUI</code></td><td>הכלי לא יכול לענות בתוך חיבור ה-RDP. הוא עובר לדרך איטית יותר, או לא עולה.</td><td>שער ה-RDP (RD Gateway) ותוכנת האבטחה בשרת לא יחסמו ערוצים וירטואליים (static virtual channels) בחיבור.</td></tr>
+<tr><td>חלון 'הפעלה' (Win+R) ו-PowerShell</td><td>המחבר לא יכול להפעיל את הכלי. <strong>הרצות שכותבות שכר נעצרות לפני שנכתב משהו.</strong></td><td>לא להחיל על המשתמש של דקל את <em dir="ltr">User Configuration → Administrative Templates → Start Menu and Taskbar → Remove Run menu from Start Menu</em>. לאפשר לו להריץ <code>powershell.exe</code>.</td></tr>
+<tr><td>הפניית לוח ההעתקה</td><td>האימותים שמוודאים מה נכתב נכשלים. <strong>הרצות נעצרות.</strong></td><td><em dir="ltr">Computer Configuration → Administrative Templates → Windows Components → Remote Desktop Services → Remote Desktop Session Host → Device and Resource Redirection → Do not allow Clipboard redirection</em> = Not configured או Disabled.</td></tr>
+<tr><td>מצב השפה של PowerShell</td><td>במצב Constrained Language הכלי לא יכול לקרוא את חלונות התוכנה. <strong>הרצות שכותבות שכר נעצרות.</strong></td><td>להחריג את המשתמש של דקל ממדיניות AppLocker / WDAC, או לאפשר בה את הסקריפטים בתיקייה <code>C:\ui-map</code>.</td></tr>
+<tr><td>מדיניות הרצת סקריפטים (Group Policy)</td><td><code>Restricted</code> או <code>AllSigned</code> עוצרים את הסקריפט של הכלי. <strong>הרצות שכותבות שכר נעצרות.</strong></td><td><em dir="ltr">Computer (or User) Configuration → Administrative Templates → Windows Components → Windows PowerShell → Turn on Script Execution</em> = Not configured, או RemoteSigned.</td></tr>
+<tr><td>הפניית כוננים (<code>\\tsclient\DEKEL</code>)</td><td>ייצוא תלושים ודוחות נכשל, והכלי לא מותקן.</td><td><em dir="ltr">Computer Configuration → Administrative Templates → Windows Components → Remote Desktop Services → Remote Desktop Session Host → Device and Resource Redirection → Do not allow drive redirection</em> = Not configured או Disabled.</td></tr>
+</tbody></table></div>
+<div class="code"><button class="copy" type="button">העתק</button><pre><span class="c"># בחיבור ה-RDP של המשתמש של דקל — צפוי: FullLanguage; אין Restricted/AllSigned ב-MachinePolicy או UserPolicy; True</span>
+$ExecutionContext.SessionState.LanguageMode
+Get-ExecutionPolicy -List
+Test-Path \\tsclient\DEKEL</pre></div>
 </section><section class="sec" id="ops-he"><span class="sec-n">13</span><h2>מדריך תפעול</h2>
 <div class="code"><button class="copy" type="button">העתק</button><pre>./install.sh status     <span class="c"># what is running, which version, and the addresses</span>
 ./install.sh logs       <span class="c"># follow everything; add a service name to narrow it</span>
